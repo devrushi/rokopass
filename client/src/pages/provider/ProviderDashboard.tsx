@@ -1,14 +1,18 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { BarList } from "../../components/analytics/BarList";
+import { StatRow, StatTile } from "../../components/analytics/StatTile";
 import { useAuth } from "../../context/AuthContext";
 import { apiRequest, ApiError } from "../../lib/apiClient";
-import type { Activity, PendingBooking } from "../../lib/types";
+import { bookingsByStatusToBarItems } from "../../lib/bookingStatusDisplay";
+import type { Activity, PendingBooking, ProviderAnalytics } from "../../lib/types";
 import "./provider.css";
 
 export function ProviderDashboard() {
   const { user, refreshUser } = useAuth();
   const [activities, setActivities] = useState<Activity[] | null>(null);
   const [pending, setPending] = useState<PendingBooking[] | null>(null);
+  const [analytics, setAnalytics] = useState<ProviderAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -26,6 +30,9 @@ export function ProviderDashboard() {
     apiRequest<{ activities: Activity[] }>("/activities/mine")
       .then((data) => setActivities(data.activities))
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load activities"));
+    apiRequest<ProviderAnalytics>("/analytics/provider")
+      .then((data) => setAnalytics(data))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load analytics"));
     loadPending();
   }, []);
 
@@ -73,6 +80,56 @@ export function ProviderDashboard() {
       </div>
 
       {error && <p className="form__error">{error}</p>}
+
+      {analytics && (
+        <section>
+          <h2>Your performance</h2>
+          <StatRow>
+            <StatTile label="Activities" value={String(analytics.totalActivities)} />
+            <StatTile
+              label="Attendance rate"
+              value={analytics.attendanceRatePercent === null ? "—" : `${analytics.attendanceRatePercent}%`}
+            />
+            <StatTile
+              label="Capacity utilization"
+              value={
+                analytics.avgCapacityUtilizationPercent === null
+                  ? "—"
+                  : `${analytics.avgCapacityUtilizationPercent}%`
+              }
+            />
+            <StatTile
+              label="Avg. approval time"
+              value={
+                analytics.avgApprovalResponseMinutes === null
+                  ? "—"
+                  : `${analytics.avgApprovalResponseMinutes} min`
+              }
+            />
+            <StatTile
+              label="Repeat bookings"
+              value={analytics.repeatBookingRatePercent === null ? "—" : `${analytics.repeatBookingRatePercent}%`}
+            />
+          </StatRow>
+
+          {Object.keys(analytics.bookingsByStatus).length > 0 && (
+            <>
+              <h3>Bookings by status</h3>
+              <BarList items={bookingsByStatusToBarItems(analytics.bookingsByStatus)} />
+            </>
+          )}
+
+          {analytics.topActivities.length > 0 && (
+            <>
+              <h3>Top activities</h3>
+              <BarList
+                items={analytics.topActivities.map((a) => ({ label: a.title, value: a.bookingsCount }))}
+                formatValue={(v) => `${v} bookings`}
+              />
+            </>
+          )}
+        </section>
+      )}
 
       <section>
         <h2>WhatsApp contact number</h2>

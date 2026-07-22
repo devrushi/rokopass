@@ -29,7 +29,10 @@ export function Layout() {
         <nav className={`layout__nav ${navOpen ? "layout__nav--open" : ""}`}>
           {user ? (
             <>
-              <Link to={user.role === "PROVIDER" ? "/provider" : "/dashboard"} onClick={() => setNavOpen(false)}>
+              <Link
+                to={user.role === "PROVIDER" ? "/provider" : user.role === "ADMIN" ? "/admin" : "/dashboard"}
+                onClick={() => setNavOpen(false)}
+              >
                 Dashboard
               </Link>
               <Link to="/plans" onClick={() => setNavOpen(false)}>

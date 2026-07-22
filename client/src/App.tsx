@@ -3,6 +3,7 @@ import { HomeRedirect } from "./components/HomeRedirect";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ActivityModeration } from "./pages/admin/ActivityModeration";
+import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { PendingProviders } from "./pages/admin/PendingProviders";
 import { BillingReturn } from "./pages/BillingReturn";
 import { Checkout } from "./pages/Checkout";
@@ -128,6 +129,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={["PROVIDER", "ADMIN"]}>
               <Roster />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminDashboard />
             </ProtectedRoute>
           }
         />

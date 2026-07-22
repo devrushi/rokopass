@@ -1,14 +1,18 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { BarList } from "../components/analytics/BarList";
+import { StatRow, StatTile } from "../components/analytics/StatTile";
 import { useAuth, type UserProfile } from "../context/AuthContext";
 import { apiRequest, ApiError } from "../lib/apiClient";
-import type { CreditSummary } from "../lib/types";
+import type { CreditSummary, ParentAnalytics } from "../lib/types";
+import "./provider/provider.css";
 import "./Dashboard.css";
 
 export function Dashboard() {
   const { user: sessionUser } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [credits, setCredits] = useState<CreditSummary | null>(null);
+  const [analytics, setAnalytics] = useState<ParentAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -18,11 +22,13 @@ export function Dashboard() {
     Promise.all([
       apiRequest<{ user: UserProfile }>("/auth/me"),
       apiRequest<CreditSummary>("/billing/credits"),
+      apiRequest<ParentAnalytics>("/analytics/parent"),
     ])
-      .then(([profileData, creditData]) => {
+      .then(([profileData, creditData, analyticsData]) => {
         if (!cancelled) {
           setProfile(profileData.user);
           setCredits(creditData);
+          setAnalytics(analyticsData);
         }
       })
       .catch((err) => {
@@ -100,6 +106,60 @@ export function Dashboard() {
             View plans
           </Link>
         </div>
+      )}
+
+      {analytics && (
+        <>
+          <h2>Your activity</h2>
+          <StatRow>
+            <StatTile label="Credit balance" value={String(analytics.balance)} />
+            <StatTile label="Used in last 30 days" value={String(analytics.creditsUsedLast30Days)} hint="credits" />
+          </StatRow>
+
+          {analytics.spendingByCategory.length > 0 && (
+            <>
+              <h3>Spending by category</h3>
+              <BarList
+                items={analytics.spendingByCategory.map((c) => ({ label: c.category, value: c.creditsSpent }))}
+                formatValue={(v) => `${v} cr`}
+              />
+            </>
+          )}
+
+          {analytics.childrenAttendance.length > 0 && (
+            <>
+              <h3>Attendance by child</h3>
+              <ul className="activity-list">
+                {analytics.childrenAttendance.map((child) => (
+                  <li key={child.childId} className="activity-card">
+                    <strong>
+                      {child.firstName} {child.lastName}
+                    </strong>
+                    <span className="activity-card__meta">
+                      {child.attended} attended · {child.noShow} no-show · {child.upcoming} upcoming
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {analytics.upcomingBookings.length > 0 && (
+            <>
+              <h3>Upcoming</h3>
+              <ul className="activity-list">
+                {analytics.upcomingBookings.map((booking) => (
+                  <li key={booking.id} className="activity-card">
+                    <span>
+                      {booking.activityTitle} · {booking.childFirstName}
+                    </span>
+                    <span className="activity-card__meta">{new Date(booking.startsAt).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </>
       )}
     </div>
   );

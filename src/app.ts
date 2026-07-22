@@ -8,6 +8,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { activitiesRouter } from "./routes/activities";
 import { adminRouter } from "./routes/admin";
 import { ageGroupsRouter } from "./routes/ageGroups";
+import { analyticsRouter } from "./routes/analytics";
 import { authRouter } from "./routes/auth";
 import { billingRouter } from "./routes/billing";
 import { bookingsRouter } from "./routes/bookings";
@@ -52,6 +53,7 @@ export function createApp() {
   app.use("/children", childrenRouter);
   app.use("/bookings", bookingsRouter);
   app.use("/admin", adminRouter);
+  app.use("/analytics", analyticsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

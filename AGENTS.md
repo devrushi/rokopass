@@ -46,6 +46,12 @@ below) is complete end-to-end for that core loop:
   (local disk storage — see the flag on that below) and can set a
   WhatsApp number; parents see both plus a "Chat on WhatsApp" deep link
   (not a real WhatsApp Business API integration) on an activity's page.
+- **Analytics** — all three roles get a stats section on their dashboard
+  (`/dashboard`, `/provider`, `/admin`), computed live from existing
+  schema data — no separate tracking/instrumentation. Parents see credit
+  usage and per-child attendance; providers see attendance/capacity/
+  approval-speed/repeat-booking rates; admins see platform-wide growth
+  and moderation-throughput numbers.
 
 **Explicitly not done** — flagged in detail in the relevant log entries,
 summarized here: no live Stripe verification was performed (all Stripe
@@ -778,3 +784,57 @@ the activity detail page.
   both photos rendered (a real cross-origin image load, not mocked) and
   the WhatsApp button with the correct deep-link URL and prefilled
   message — was driven in a real browser with zero console errors.
+
+### 2026-07-22 — Analytics Dashboards (Parent, Provider, Admin)
+
+Post-launch feature: a stats section for all three roles, computed
+entirely from existing schema data (no new event tracking/instrumentation
+added — a deliberate choice over reaching for an AI/ML approach, since
+every number here is a deterministic aggregate query, not a prediction;
+see the note below on where AI would actually earn its keep).
+
+**Built:**
+- `src/services/analytics.ts` — three pure aggregation functions,
+  `getParentAnalytics`/`getProviderAnalytics`/`getAdminAnalytics`, each a
+  handful of parallel Prisma queries plus in-memory grouping (no raw SQL).
+  Parent: balance, 30-day credit spend, spending by category, per-child
+  attendance, upcoming bookings. Provider: attendance rate, average
+  session-capacity utilization, average approve/reject response time,
+  repeat-booking rate, top activities by bookings. Admin: user/signup
+  counts, pending-provider queue depth, average provider-approval time,
+  bookings by status, flagged/featured activity counts, top categories.
+  All percentage/time-average fields are rounded to 1 decimal
+  (`round1()`) before returning — the first browser pass caught raw
+  floats like `1.8553666666666666` overflowing their stat tile into the
+  neighboring one, not just looking untidy.
+- `GET /analytics/parent`, `GET /analytics/provider` (new
+  `src/routes/analytics.ts`, role-gated), and `GET /admin/analytics`
+  (added to the existing admin router, already gated at `ADMIN`).
+- Frontend: two new shared components, `StatTile`/`StatRow` and `BarList`
+  (`client/src/components/analytics/`), following the `dataviz` skill's
+  form rules — a stat tile for single numbers, a single-hue bar list for
+  magnitude comparisons (top activities/categories), and the reserved
+  good/warning/serious/critical status palette for booking-status
+  breakdowns via a shared `bookingsByStatusToBarItems()` helper. Added to
+  `Dashboard.tsx` (parent), `ProviderDashboard.tsx`, and a new
+  `AdminDashboard.tsx` (new `/admin` route, added to `HomeRedirect` and
+  the nav bar so admins land there instead of the generic dashboard).
+
+**AI for analytics — considered, not used:** the request asked this
+explicitly before building. Every metric here is a straight aggregate
+(counts, rates, averages) with an exact right answer — AI would add
+latency, cost, and a chance of a plausible-sounding wrong number for
+things a `GROUP BY` already answers exactly. AI becomes worth it once the
+ask moves from *reporting what happened* to *interpreting or predicting*
+it — e.g. plain-English summaries of a provider's trends, anomaly/no-show
+risk flagging, or a natural-language query box over the same data. None
+of that was requested; noted here as the natural next step if it is.
+
+**Verified:** 106 backend tests green (8 new, covering exact-value
+assertions for parent/provider analytics via direct-Prisma fixtures and a
+delta-based snapshot test for admin's platform-wide counts, plus role
+gating). Both frontend and backend builds clean. All three dashboards
+were driven in a real browser (tokens minted directly for the existing
+admin/provider/parent accounts, one isolated browser context per role) —
+zero console errors, real data rendered correctly, and the rounding bug
+above was caught and fixed by this pass, not by eyeballing the code.

@@ -146,3 +146,43 @@ export interface AuditLogEntry {
   createdAt: string;
   admin: { id: string; firstName: string; lastName: string };
 }
+
+export interface ParentAnalytics {
+  balance: number;
+  plan: { id: string; name: string; monthlyCredits: number } | null;
+  currentPeriodEnd: string | null;
+  creditsUsedLast30Days: number;
+  spendingByCategory: { category: string; creditsSpent: number }[];
+  childrenAttendance: {
+    childId: string;
+    firstName: string;
+    lastName: string;
+    attended: number;
+    noShow: number;
+    upcoming: number;
+  }[];
+  upcomingBookings: { id: string; activityTitle: string; childFirstName: string; startsAt: string }[];
+}
+
+export interface ProviderAnalytics {
+  totalActivities: number;
+  bookingsByStatus: Record<string, number>;
+  attendanceRatePercent: number | null;
+  avgCapacityUtilizationPercent: number | null;
+  avgApprovalResponseMinutes: number | null;
+  repeatBookingRatePercent: number | null;
+  topActivities: { activityId: string; title: string; bookingsCount: number }[];
+}
+
+export interface AdminAnalytics {
+  users: { parents: number; providers: number; admins: number };
+  newSignupsLast30Days: { parents: number; providers: number };
+  pendingProvidersCount: number;
+  avgProviderApprovalHours: number | null;
+  bookingsByStatus: Record<string, number>;
+  activeSubscriptions: number;
+  flaggedActivitiesCount: number;
+  featuredActivitiesCount: number;
+  auditLogVolumeLast30Days: number;
+  topCategories: { category: string; activityCount: number }[];
+}

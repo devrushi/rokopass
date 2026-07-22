@@ -18,5 +18,9 @@ export function HomeRedirect() {
     return <Navigate to="/provider" replace />;
   }
 
+  if (user.role === "ADMIN") {
+    return <Navigate to="/admin" replace />;
+  }
+
   return <Navigate to="/dashboard" replace />;
 }

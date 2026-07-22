@@ -7,6 +7,7 @@ import { requireAuth } from "../middleware/requireAuth";
 import { requireRole } from "../middleware/requireRole";
 import { activitySearchSchema, moderateActivitySchema, rejectProviderSchema } from "../schemas/admin";
 import { serializeUser } from "../lib/serializeUser";
+import { getAdminAnalytics } from "../services/analytics";
 
 export const adminRouter = Router();
 
@@ -211,6 +212,17 @@ adminRouter.get("/audit-log", async (req, res, next) => {
     });
 
     res.json({ entries });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Analytics ---
+
+adminRouter.get("/analytics", async (_req, res, next) => {
+  try {
+    const data = await getAdminAnalytics();
+    res.json(data);
   } catch (err) {
     next(err);
   }
