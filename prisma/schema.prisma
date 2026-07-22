@@ -1,0 +1,16 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Minimal placeholder model so `prisma migrate dev` has something to work
+// with on first run. Replace/extend once the domain schema (venues,
+// activities, subscriptions, bookings, etc.) is designed in a later step.
+model HealthCheck {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+}
