@@ -28,6 +28,10 @@ jobs:
       NODE_ENV: test
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/rokidspass?schema=public
       CORS_ORIGIN: "*"
+      JWT_ACCESS_SECRET: ci-test-only-access-secret-not-used-anywhere-else-0000
+      JWT_REFRESH_SECRET: ci-test-only-refresh-secret-not-used-anywhere-else-0000
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 30d
 
     steps:
       - uses: actions/checkout@v4
@@ -44,3 +48,21 @@ jobs:
       - run: npm run build
 
       - run: npm test
+
+  client-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - working-directory: client
+        run: npm ci
+
+      - working-directory: client
+        run: npm run build

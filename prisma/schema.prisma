@@ -7,10 +7,18 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Minimal placeholder model so `prisma migrate dev` has something to work
-// with on first run. Replace/extend once the domain schema (venues,
-// activities, subscriptions, bookings, etc.) is designed in a later step.
-model HealthCheck {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
+enum UserRole {
+  PARENT
+  ADMIN
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  firstName    String
+  lastName     String
+  role         UserRole @default(PARENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

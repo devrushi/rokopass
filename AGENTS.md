@@ -88,3 +88,83 @@ entries short (a few bullets) — don't let it grow unbounded.
   nothing still reaches the remote untested.
 - Commands: `npm test` (single run), `npm run test:watch` (watch mode during
   development).
+
+### 2026-07-22 — Step 2: Identity and Access Management
+
+**Built:**
+- `User` model + migration (`prisma/migrations/20260722015709_add_user_auth`)
+  — email (unique), `passwordHash`, firstName/lastName, `role` enum
+  (`PARENT` default, `ADMIN`). Replaces the Step 1 `HealthCheck` placeholder.
+- Password hashing via `bcryptjs` (`src/lib/password.ts`, 12 salt rounds) —
+  chosen over native `bcrypt` to avoid node-gyp/build-tool requirements.
+- JWT access + refresh tokens (`src/lib/jwt.ts`) signed with **separate
+  secrets** (`JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET`, both required env,
+  min 32 chars) so a leaked/misused token can't be replayed as the other
+  type. Defaults: access 15m, refresh 30d, both configurable via env.
+- `requireAuth` middleware (`src/middleware/requireAuth.ts`) reading
+  `Authorization: Bearer <token>`; `src/types/express.d.ts` augments
+  `Request.user` with the decoded payload (`sub`, `email`, `role`).
+- Auth routes (`src/routes/auth.ts`, mounted at `/auth`): `POST /register`,
+  `POST /login`, `POST /refresh` (issues a new access token from a valid
+  refresh token), `GET /me` (protected, returns the current profile).
+  Validation via zod schemas in `src/schemas/auth.ts` (password requires 8+
+  chars, a letter, and a number). `serializeUser()` strips `passwordHash`
+  from every response.
+- Integration tests (`tests/auth.register.test.ts`, 7 cases) hit the real
+  local Postgres like `health.test.ts` does — covers success, duplicate
+  email (409), invalid email/weak password/missing field (400), that the
+  stored hash isn't the plaintext password, and that the returned access
+  token actually works against `/auth/me`. Cleans up its own rows via
+  `afterAll` (emails suffixed `@test.rokidspass.local`).
+- React frontend scaffolded in **`client/`** (Vite + React 19 + TypeScript +
+  `react-router-dom`) — a plain, separate npm project sitting alongside the
+  root API, not merged into a monorepo tool (no Nx/Turborepo). Root
+  `package.json`/`tsconfig.json`/tests are untouched.
+- `client/src/lib/tokenStorage.ts` (localStorage get/set/clear helpers) and
+  `client/src/lib/apiClient.ts` (fetch wrapper: attaches the access token,
+  and on a 401 auto-refreshes once via `/auth/refresh` and retries — with
+  concurrent 401s deduped to a single in-flight refresh call).
+- `client/src/context/AuthContext.tsx` — holds `user`/`login`/`register`/
+  `logout`; on mount, if a token is already stored, calls `/auth/me` to
+  restore the session.
+- Responsive `Layout` + nav (`client/src/components/Layout.tsx`, hamburger
+  menu under 640px) and `Login`/`Register`/`Dashboard` pages. `Dashboard`
+  does its own `/auth/me` fetch (not just reading the cached context user)
+  to show authoritative profile data, per the step's ask.
+
+**Conventions/decisions for future steps:**
+- **Refresh tokens are stateless JWTs — not stored or revocable
+  server-side.** There's no `RefreshToken`/session table yet, so logout is
+  client-side only (clears localStorage); a stolen refresh token stays
+  valid until it naturally expires. Fine for now, but flag before this ships
+  to real users — needs a DB-backed session store or blacklist.
+- Added a minimal **Register page** in the UI even though the step's ask
+  only listed a registration *API endpoint*. Without it, the requested
+  dashboard (profile fetch) would have been unreachable from the browser —
+  same reasoning as building Login. Kept both intentionally small (no
+  validation beyond native HTML attributes + server-side errors surfaced
+  as-is).
+- CI (`.github/workflows/test.yml`) gained a second job, `client-build`,
+  that type-checks and builds the frontend on every push/PR — no frontend
+  *tests* exist yet, this is a build gate only. The Husky pre-push hook
+  (`.husky/pre-push`) now also runs `npm --prefix client run build` for the
+  same reason, locally.
+- Frontend talks to the API via `VITE_API_URL` (`client/.env`, defaults to
+  `http://localhost:3000`); backend `CORS_ORIGIN` is still `*` from Step 1,
+  fine for local dev but should be locked to the real frontend origin
+  before any deploy.
+
+**Flag for whoever picks this up next:**
+- No frontend test suite (React Testing Library, component tests, etc.) —
+  only the build/type-check gate above. Manual verification for this step
+  was done with a throwaway Playwright driver script (not committed):
+  registered a user, landed on the dashboard with real fetched profile
+  data, checked the mobile hamburger nav and dark mode, logged out and
+  back in — zero console errors throughout.
+- No password reset or email verification flow yet.
+- `User.role` only has `PARENT`/`ADMIN` — no child/dependent profiles
+  linked to a parent account yet, which the actual "children's activities"
+  domain will need soon.
+- Verified end-to-end: full backend suite is 24 tests green (`npm test`),
+  both `npm run build` (root) and `client`'s build are clean, and the
+  browser flow above passed with screenshots reviewed.

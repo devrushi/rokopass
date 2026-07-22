@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { env } from "./config/env";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { authRouter } from "./routes/auth";
 import { healthRouter } from "./routes/health";
 
 export function createApp() {
@@ -17,6 +18,7 @@ export function createApp() {
   }
 
   app.use("/health", healthRouter);
+  app.use("/auth", authRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
