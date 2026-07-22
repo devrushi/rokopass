@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma";
 import { serializeUser } from "../lib/serializeUser";
 import { AppError } from "../middleware/errorHandler";
 import { requireAuth } from "../middleware/requireAuth";
-import { loginSchema, refreshSchema, registerSchema } from "../schemas/auth";
+import { loginSchema, refreshSchema, registerSchema, updateProfileSchema } from "../schemas/auth";
 
 export const authRouter = Router();
 
@@ -97,6 +97,24 @@ authRouter.get("/me", requireAuth, async (req, res, next) => {
     if (!user) {
       throw new AppError("User not found", 404);
     }
+    res.json({ user: serializeUser(user) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+authRouter.patch("/me", requireAuth, async (req, res, next) => {
+  try {
+    const parsed = updateProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(parsed.error.issues[0]?.message ?? "Invalid profile data", 400);
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user!.sub },
+      data: parsed.data,
+    });
+
     res.json({ user: serializeUser(user) });
   } catch (err) {
     next(err);

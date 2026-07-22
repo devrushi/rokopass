@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useParams } from "react-router-dom";
-import { apiRequest, ApiError } from "../../lib/apiClient";
-import type { Activity, ClassSession } from "../../lib/types";
+import { apiAssetUrl, apiRequest, ApiError } from "../../lib/apiClient";
+import type { Activity, ActivityMediaType, ClassSession } from "../../lib/types";
 import "./provider.css";
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -41,6 +41,14 @@ export function ActivityDetail() {
   const [frequency, setFrequency] = useState<"WEEKLY" | "BIWEEKLY">("WEEKLY");
   const [startDate, setStartDate] = useState(() => new Date().toISOString().slice(0, 10));
 
+  const [mediaType, setMediaType] = useState<ActivityMediaType>("ACTIVITY_PHOTO");
+  const [caption, setCaption] = useState("");
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
+  const [isUploadingMedia, setIsUploadingMedia] = useState(false);
+  const [deletingMediaId, setDeletingMediaId] = useState<string | null>(null);
+  const mediaFileInputRef = useRef<HTMLInputElement>(null);
+
   const loadSessions = useCallback(() => {
     if (!id) return;
     const from = weekStart;
@@ -53,12 +61,14 @@ export function ActivityDetail() {
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load sessions"));
   }, [id, weekStart]);
 
-  useEffect(() => {
+  const loadActivity = useCallback(() => {
     if (!id) return;
     apiRequest<{ activity: Activity }>(`/activities/${id}`, { skipAuth: true })
       .then((data) => setActivity(data.activity))
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load activity"));
   }, [id]);
+
+  useEffect(loadActivity, [loadActivity]);
 
   useEffect(() => {
     loadSessions();
@@ -79,6 +89,43 @@ export function ActivityDetail() {
       setScheduleError(err instanceof ApiError ? err.message : "Failed to create schedule");
     } finally {
       setIsSubmittingSchedule(false);
+    }
+  }
+
+  async function handleUploadMedia(event: FormEvent) {
+    event.preventDefault();
+    if (!id || !mediaFile) return;
+    setMediaError(null);
+    setIsUploadingMedia(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", mediaFile);
+      formData.append("type", mediaType);
+      if (caption) formData.append("caption", caption);
+
+      await apiRequest(`/activities/${id}/media`, { method: "POST", body: formData });
+      setCaption("");
+      setMediaFile(null);
+      if (mediaFileInputRef.current) mediaFileInputRef.current.value = "";
+      loadActivity();
+    } catch (err) {
+      setMediaError(err instanceof ApiError ? err.message : "Failed to upload photo");
+    } finally {
+      setIsUploadingMedia(false);
+    }
+  }
+
+  async function handleDeleteMedia(mediaId: string) {
+    if (!id) return;
+    setDeletingMediaId(mediaId);
+    setMediaError(null);
+    try {
+      await apiRequest(`/activities/${id}/media/${mediaId}`, { method: "DELETE" });
+      loadActivity();
+    } catch (err) {
+      setMediaError(err instanceof ApiError ? err.message : "Failed to delete photo");
+    } finally {
+      setDeletingMediaId(null);
     }
   }
 
@@ -120,6 +167,66 @@ export function ActivityDetail() {
           </p>
         </div>
       </div>
+
+      <section>
+        <h2>Photos</h2>
+        <form className="form" onSubmit={handleUploadMedia}>
+          <div className="form-row">
+            <label>
+              Photo type
+              <select value={mediaType} onChange={(e) => setMediaType(e.target.value as ActivityMediaType)}>
+                <option value="ACTIVITY_PHOTO">Activity photo</option>
+                <option value="STAFF_PHOTO">Staff photo</option>
+              </select>
+            </label>
+            <label>
+              Caption (optional)
+              <input value={caption} onChange={(e) => setCaption(e.target.value)} maxLength={200} />
+            </label>
+          </div>
+
+          <label>
+            Image (JPEG, PNG, or WEBP, up to 5MB)
+            <input
+              ref={mediaFileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={(e) => setMediaFile(e.target.files?.[0] ?? null)}
+              required
+            />
+          </label>
+
+          {mediaError && <p className="form__error">{mediaError}</p>}
+
+          <button type="submit" className="button" disabled={isUploadingMedia || !mediaFile}>
+            {isUploadingMedia ? "Uploading…" : "Upload photo"}
+          </button>
+        </form>
+
+        {activity.media.length > 0 && (
+          <div className="media-grid">
+            {activity.media.map((item) => (
+              <div className="media-grid__item" key={item.id}>
+                <img src={apiAssetUrl(item.url)} alt={item.caption ?? item.type} />
+                <div className="media-grid__meta">
+                  <span>
+                    {item.type === "ACTIVITY_PHOTO" ? "Activity" : "Staff"}
+                    {item.caption ? ` · ${item.caption}` : ""}
+                  </span>
+                  <button
+                    type="button"
+                    className="button button--danger"
+                    disabled={deletingMediaId === item.id}
+                    onClick={() => handleDeleteMedia(item.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section>
         <h2>Add a recurring schedule</h2>

@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { activityMediaPublicUrl, activityMediaUpload, deleteActivityMediaFile } from "../lib/upload";
 import { param } from "../lib/requestParams";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/errorHandler";
@@ -9,6 +10,7 @@ import {
   createScheduleSchema,
   updateActivitySchema,
 } from "../schemas/activity";
+import { uploadMediaSchema } from "../schemas/media";
 import { syncSessionsForSchedule } from "../services/scheduleGenerator";
 
 export const activitiesRouter = Router();
@@ -38,6 +40,7 @@ activitiesRouter.get("/", async (req, res, next) => {
       },
       include: {
         ageGroup: true,
+        media: true,
         provider: { select: { id: true, firstName: true, lastName: true } },
       },
       orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
@@ -52,7 +55,7 @@ activitiesRouter.get("/mine", requireAuth, requireRole("PROVIDER", "ADMIN"), asy
   try {
     const activities = await prisma.activity.findMany({
       where: { providerId: req.user!.sub },
-      include: { ageGroup: true },
+      include: { ageGroup: true, media: true },
       orderBy: { createdAt: "desc" },
     });
     res.json({ activities });
@@ -65,7 +68,11 @@ activitiesRouter.get("/:id", async (req, res, next) => {
   try {
     const activity = await prisma.activity.findUnique({
       where: { id: param(req.params.id) },
-      include: { ageGroup: true },
+      include: {
+        ageGroup: true,
+        media: true,
+        provider: { select: { id: true, firstName: true, lastName: true, whatsappNumber: true } },
+      },
     });
     if (!activity) {
       throw new AppError("Activity not found", 404);
@@ -90,7 +97,7 @@ activitiesRouter.post("/", requireAuth, requireRole("PROVIDER", "ADMIN"), async 
 
     const activity = await prisma.activity.create({
       data: { ...parsed.data, providerId: req.user!.sub },
-      include: { ageGroup: true },
+      include: { ageGroup: true, media: true },
     });
 
     res.status(201).json({ activity });
@@ -118,7 +125,7 @@ activitiesRouter.patch("/:id", requireAuth, requireRole("PROVIDER", "ADMIN"), as
     const updated = await prisma.activity.update({
       where: { id: activity.id },
       data: parsed.data,
-      include: { ageGroup: true },
+      include: { ageGroup: true, media: true },
     });
 
     res.json({ activity: updated });
@@ -174,3 +181,69 @@ activitiesRouter.get("/:id/sessions", async (req, res, next) => {
     next(err);
   }
 });
+
+activitiesRouter.post(
+  "/:id/media",
+  requireAuth,
+  requireRole("PROVIDER", "ADMIN"),
+  (req, res, next) => {
+    const activityId = param(req.params.id);
+
+    loadOwnedActivity(activityId, req.user!.sub, req.user!.role)
+      .then(() => {
+        activityMediaUpload.single("file")(req, res, async (uploadErr) => {
+          try {
+            if (uploadErr) {
+              throw new AppError(uploadErr.message || "Upload failed", 400);
+            }
+            if (!req.file) {
+              throw new AppError("No file uploaded", 400);
+            }
+
+            const parsed = uploadMediaSchema.safeParse(req.body);
+            if (!parsed.success) {
+              deleteActivityMediaFile(req.file.filename);
+              throw new AppError(parsed.error.issues[0]?.message ?? "Invalid media data", 400);
+            }
+
+            const media = await prisma.activityMedia.create({
+              data: {
+                activityId,
+                type: parsed.data.type,
+                caption: parsed.data.caption,
+                url: activityMediaPublicUrl(req.file.filename),
+              },
+            });
+
+            res.status(201).json({ media });
+          } catch (err) {
+            next(err);
+          }
+        });
+      })
+      .catch(next);
+  },
+);
+
+activitiesRouter.delete(
+  "/:id/media/:mediaId",
+  requireAuth,
+  requireRole("PROVIDER", "ADMIN"),
+  async (req, res, next) => {
+    try {
+      const activity = await loadOwnedActivity(param(req.params.id), req.user!.sub, req.user!.role);
+
+      const media = await prisma.activityMedia.findUnique({ where: { id: param(req.params.mediaId) } });
+      if (!media || media.activityId !== activity.id) {
+        throw new AppError("Media not found", 404);
+      }
+
+      await prisma.activityMedia.delete({ where: { id: media.id } });
+      deleteActivityMediaFile(media.url);
+
+      res.status(204).send();
+    } catch (err) {
+      next(err);
+    }
+  },
+);

@@ -28,6 +28,9 @@ model User {
   role               UserRole                     @default(PARENT)
   verificationStatus ProviderVerificationStatus?
   stripeCustomerId   String?                      @unique
+  // E.164-ish (e.g. "+441234567890"), used to build a wa.me deep link for parents to message a
+  // provider directly — not a real WhatsApp Business API integration, see AGENTS.md.
+  whatsappNumber     String?
   createdAt          DateTime                     @default(now())
   updatedAt          DateTime                     @updatedAt
 
@@ -70,9 +73,30 @@ model Activity {
 
   recurringSchedules RecurringSchedule[]
   sessions           ClassSession[]
+  media              ActivityMedia[]
 
   @@index([providerId])
   @@index([ageGroupId])
+}
+
+enum MediaType {
+  ACTIVITY_PHOTO
+  STAFF_PHOTO
+}
+
+// Uploaded files are stored on local disk (see src/lib/upload.ts) with this row pointing at the
+// public URL — a placeholder for a real object-storage provider (S3/Cloudinary/etc.) later,
+// same pattern as src/lib/email.ts's seam for a real email provider.
+model ActivityMedia {
+  id         String    @id @default(uuid())
+  activityId String
+  activity   Activity  @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  type       MediaType
+  url        String
+  caption    String?
+  createdAt  DateTime  @default(now())
+
+  @@index([activityId])
 }
 
 enum RecurrenceFrequency {

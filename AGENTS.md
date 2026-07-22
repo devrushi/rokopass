@@ -42,6 +42,10 @@ below) is complete end-to-end for that core loop:
   blocked, only public visibility); admins can flag (hide) or feature
   (sort-to-top) any activity; every moderation action writes an
   `AuditLog` row.
+- **Activity media & contact** — providers upload activity/staff photos
+  (local disk storage — see the flag on that below) and can set a
+  WhatsApp number; parents see both plus a "Chat on WhatsApp" deep link
+  (not a real WhatsApp Business API integration) on an activity's page.
 
 **Explicitly not done** — flagged in detail in the relevant log entries,
 summarized here: no live Stripe verification was performed (all Stripe
@@ -698,3 +702,79 @@ counts as confirmed (previously bookings were instant).
   credit refund is verified directly against the ledger (balance math
   checked, not just eyeballed) → parent sees `REJECTED` — was driven
   across three isolated real-browser sessions with zero console errors.
+
+### 2026-07-22 — Activity Media (Photos) and WhatsApp Contact
+
+Two small post-launch feature requests, built together since both touch
+the activity detail page.
+
+**Built:**
+- `ActivityMedia` model (`type`: `ACTIVITY_PHOTO`/`STAFF_PHOTO`, `url`,
+  optional `caption`) and `User.whatsappNumber`.
+- `src/lib/upload.ts` — file uploads go to **local disk** under
+  `<project root>/uploads/activities/` (multer, 5MB limit, JPEG/PNG/WEBP
+  only), served statically at `/uploads`. No object-storage provider
+  (S3/Cloudinary/etc.) is configured — this is the seam to swap one in
+  later, same pattern as `src/lib/email.ts`. `uploads/` is gitignored.
+  **Real gotcha, not obvious in advance:** helmet's default
+  `Cross-Origin-Resource-Policy: same-origin` silently blocks `<img>` tags
+  loaded from a different origin (the frontend at :5173 loading images
+  from the API at :3000 in dev) — the browser shows a blank broken image
+  with no console error pointing at the cause. Fixed by relaxing that one
+  header to `cross-origin`, only for the `/uploads` path, in `app.ts`.
+- `POST /activities/:id/media` (multipart upload, ownership-checked) and
+  `DELETE /activities/:id/media/:mediaId` (removes the DB row and the
+  file from disk). `GET /activities`, `/mine`, and `/:id` all now include
+  `media`; the single-activity route also includes
+  `provider.whatsappNumber` for the chat button.
+- `PATCH /auth/me` (new — previously `/auth/me` was read-only) lets a
+  user set/clear `whatsappNumber`, validated as international format
+  (`+` + 8-15 digits).
+- Frontend: a "Photos" section on the provider's `ActivityDetail` page
+  (upload form + delete-able grid, shown to the owning provider only) and
+  a WhatsApp number field on `ProviderDashboard`. Parent-facing
+  `ActivityBrowseDetail` shows an activity photo gallery, a "Meet the
+  team" staff-photo section, and (if the provider set a number) a
+  **"Chat on WhatsApp" button** — `apiClient.ts` gained `apiAssetUrl()`
+  (builds absolute URLs for `<img src>`, since media URLs from the API are
+  relative) and FormData support (skips JSON-stringifying/Content-Type
+  when the body is a `FormData`, letting the browser set the multipart
+  boundary itself).
+
+**Conventions/decisions for future steps:**
+- **The WhatsApp integration is a `wa.me` deep link, not the WhatsApp
+  Business API.** A real API integration needs a Meta developer account
+  and business verification — credentials this project doesn't have,
+  same class of blocker Stripe was in Step 4. The deep-link pattern
+  (`https://wa.me/<number>?text=<prefilled message>`) needs zero
+  credentials and is how most small marketplace/booking platforms
+  actually implement "message the provider" — it opens WhatsApp with a
+  pre-filled message, it just isn't in-app chat. If real in-app
+  messaging or delivery receipts are ever required, that's a genuinely
+  different, much larger feature (webhook-based, needs the Business API),
+  not an upgrade of this one.
+- File uploads are validated by declared MIME type only (`fileFilter` on
+  the client-reported `Content-Type`), not by sniffing actual file bytes.
+  Adequate for a trusted-provider MVP; a hardening pass before handling
+  untrusted/public uploads should verify actual file content, not just
+  the declared type.
+
+**Flag for whoever picks this up next:**
+- Local disk storage means uploaded photos **do not survive a redeploy**
+  on most hosting platforms (ephemeral filesystems) and won't work at all
+  across multiple server instances. Fine for this dev/demo environment;
+  needs a real object-storage provider before any real deployment — the
+  seam is already there (`src/lib/upload.ts`), swapping it is scoped to
+  one file plus the two routes that call `activityMediaUpload`/
+  `activityMediaPublicUrl`.
+- No image resizing/thumbnailing — the original uploaded file is served
+  as-is at whatever resolution it was uploaded, which could be large.
+- Verified: 98 backend tests green (13 new: 9 media upload/delete
+  covering ownership, file-type/size rejection, and disk cleanup on
+  delete — confirmed by actually checking the files on disk, not just the
+  DB row; 4 for the WhatsApp number endpoint), both builds clean. Full
+  flow — provider sets a WhatsApp number, creates an activity, uploads a
+  real activity photo and a captioned staff photo → parent browses, sees
+  both photos rendered (a real cross-origin image load, not mocked) and
+  the WhatsApp button with the correct deep-link URL and prefilled
+  message — was driven in a real browser with zero console errors.

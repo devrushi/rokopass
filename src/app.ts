@@ -3,6 +3,7 @@ import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import { env } from "./config/env";
+import { UPLOAD_ROOT } from "./lib/upload";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { activitiesRouter } from "./routes/activities";
 import { adminRouter } from "./routes/admin";
@@ -29,6 +30,18 @@ export function createApp() {
   if (env.NODE_ENV !== "test") {
     app.use(morgan(env.NODE_ENV === "development" ? "dev" : "combined"));
   }
+
+  // helmet's default Cross-Origin-Resource-Policy: same-origin would otherwise block the
+  // frontend (a different origin in dev — 5173 vs 3000) from rendering these images in <img>
+  // tags. Only relaxed for this one static path, not the whole app.
+  app.use(
+    "/uploads",
+    (_req, res, next) => {
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+      next();
+    },
+    express.static(UPLOAD_ROOT),
+  );
 
   app.use("/health", healthRouter);
   app.use("/auth", authRouter);

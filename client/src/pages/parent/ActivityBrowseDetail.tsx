@@ -1,13 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { apiRequest, ApiError } from "../../lib/apiClient";
-import type { Activity, Booking, Child, ClassSession } from "../../lib/types";
+import { apiAssetUrl, apiRequest, ApiError } from "../../lib/apiClient";
+import type { ActivityWithProviderContact, Booking, Child, ClassSession } from "../../lib/types";
 import "../provider/provider.css";
 import "./booking.css";
 
+// Deep link to WhatsApp — not a real Business API integration (that needs Meta developer
+// credentials this project doesn't have), just the standard "message a business" pattern most
+// small platforms use. Falls back to nothing if the provider hasn't set a number.
+function whatsappChatUrl(number: string, activityTitle: string): string {
+  const digitsOnly = number.replace(/[^\d]/g, "");
+  const message = `Hi! I have a question about "${activityTitle}" on RokidsPass.`;
+  return `https://wa.me/${digitsOnly}?text=${encodeURIComponent(message)}`;
+}
+
 export function ActivityBrowseDetail() {
   const { id } = useParams<{ id: string }>();
-  const [activity, setActivity] = useState<Activity | null>(null);
+  const [activity, setActivity] = useState<ActivityWithProviderContact | null>(null);
   const [sessions, setSessions] = useState<ClassSession[]>([]);
   const [children, setChildren] = useState<Child[]>([]);
   const [selectedChildId, setSelectedChildId] = useState("");
@@ -17,8 +26,8 @@ export function ActivityBrowseDetail() {
 
   useEffect(() => {
     if (!id) return;
-    apiRequest<{ activity: Activity }>(`/activities/${id}`, { skipAuth: true }).then((data) =>
-      setActivity(data.activity),
+    apiRequest<{ activity: ActivityWithProviderContact }>(`/activities/${id}`, { skipAuth: true }).then(
+      (data) => setActivity(data.activity),
     );
     apiRequest<{ sessions: ClassSession[] }>(`/activities/${id}/sessions`, { skipAuth: true }).then((data) =>
       setSessions(data.sessions.filter((s) => !s.isCancelled)),
@@ -54,14 +63,56 @@ export function ActivityBrowseDetail() {
     return <p className="page-status">{error ?? "Loading…"}</p>;
   }
 
+  const activityPhotos = activity.media.filter((m) => m.type === "ACTIVITY_PHOTO");
+  const staffPhotos = activity.media.filter((m) => m.type === "STAFF_PHOTO");
+
   return (
     <div className="provider-page">
-      <h1>{activity.title}</h1>
-      <p className="activity-card__meta">
-        {activity.category} · {activity.ageGroup.label} · {activity.location} · {activity.creditCost} credits
-        per class
-      </p>
+      <div className="provider-page__header">
+        <div>
+          <h1>{activity.title}</h1>
+          <p className="activity-card__meta">
+            {activity.category} · {activity.ageGroup.label} · {activity.location} ·{" "}
+            {activity.creditCost} credits per class
+          </p>
+        </div>
+        {activity.provider.whatsappNumber && (
+          <a
+            href={whatsappChatUrl(activity.provider.whatsappNumber, activity.title)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="button"
+          >
+            Chat on WhatsApp
+          </a>
+        )}
+      </div>
+
       <p>{activity.description}</p>
+
+      {activityPhotos.length > 0 && (
+        <div className="media-grid">
+          {activityPhotos.map((photo) => (
+            <div className="media-grid__item" key={photo.id}>
+              <img src={apiAssetUrl(photo.url)} alt={photo.caption ?? activity.title} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {staffPhotos.length > 0 && (
+        <>
+          <h2>Meet the team</h2>
+          <div className="media-grid">
+            {staffPhotos.map((photo) => (
+              <div className="media-grid__item" key={photo.id}>
+                <img src={apiAssetUrl(photo.url)} alt={photo.caption ?? "Staff member"} />
+                {photo.caption && <div className="media-grid__meta">{photo.caption}</div>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {confirmation && (
         <div className="booking-confirmation">

@@ -1,14 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import { apiRequest, ApiError } from "../../lib/apiClient";
 import type { Activity, PendingBooking } from "../../lib/types";
 import "./provider.css";
 
 export function ProviderDashboard() {
+  const { user, refreshUser } = useAuth();
   const [activities, setActivities] = useState<Activity[] | null>(null);
   const [pending, setPending] = useState<PendingBooking[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [whatsappNumber, setWhatsappNumber] = useState(user?.whatsappNumber ?? "");
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
+  const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false);
 
   function loadPending() {
     apiRequest<{ bookings: PendingBooking[] }>("/bookings/pending-approval")
@@ -22,6 +28,27 @@ export function ProviderDashboard() {
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load activities"));
     loadPending();
   }, []);
+
+  useEffect(() => {
+    setWhatsappNumber(user?.whatsappNumber ?? "");
+  }, [user?.whatsappNumber]);
+
+  async function handleSaveWhatsapp(event: FormEvent) {
+    event.preventDefault();
+    setWhatsappError(null);
+    setIsSavingWhatsapp(true);
+    try {
+      await apiRequest("/auth/me", {
+        method: "PATCH",
+        body: { whatsappNumber: whatsappNumber.trim() || null },
+      });
+      await refreshUser();
+    } catch (err) {
+      setWhatsappError(err instanceof ApiError ? err.message : "Failed to save WhatsApp number");
+    } finally {
+      setIsSavingWhatsapp(false);
+    }
+  }
 
   async function decide(bookingId: string, decision: "approve" | "reject") {
     setBusyId(bookingId);
@@ -46,6 +73,29 @@ export function ProviderDashboard() {
       </div>
 
       {error && <p className="form__error">{error}</p>}
+
+      <section>
+        <h2>WhatsApp contact number</h2>
+        <p className="page-status">
+          Parents browsing your activities will see a "Chat on WhatsApp" button if you set a
+          number.
+        </p>
+        <form className="form" onSubmit={handleSaveWhatsapp}>
+          <label>
+            WhatsApp number (international format)
+            <input
+              type="tel"
+              placeholder="+441234567890"
+              value={whatsappNumber}
+              onChange={(e) => setWhatsappNumber(e.target.value)}
+            />
+          </label>
+          {whatsappError && <p className="form__error">{whatsappError}</p>}
+          <button type="submit" className="button" disabled={isSavingWhatsapp}>
+            {isSavingWhatsapp ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </section>
 
       <section>
         <h2>Bookings awaiting your approval</h2>

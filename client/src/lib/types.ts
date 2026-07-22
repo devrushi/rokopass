@@ -5,6 +5,15 @@ export interface AgeGroup {
   maxAge: number;
 }
 
+export type ActivityMediaType = "ACTIVITY_PHOTO" | "STAFF_PHOTO";
+
+export interface ActivityMedia {
+  id: string;
+  type: ActivityMediaType;
+  url: string;
+  caption: string | null;
+}
+
 export interface Activity {
   id: string;
   providerId: string;
@@ -18,8 +27,18 @@ export interface Activity {
   isFlagged: boolean;
   isFeatured: boolean;
   ageGroup: AgeGroup;
+  media: ActivityMedia[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ActivityWithProviderContact extends Activity {
+  provider: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    whatsappNumber: string | null;
+  };
 }
 
 export interface ClassSession {

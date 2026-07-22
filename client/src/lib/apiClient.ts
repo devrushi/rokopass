@@ -2,6 +2,12 @@ import { clearTokens, getAccessToken, getRefreshToken, setAccessToken } from "./
 
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
 
+// Media URLs from the API are relative (e.g. "/uploads/activities/x.png") — <img> tags need an
+// absolute URL since the frontend runs on a different origin than the API in dev.
+export function apiAssetUrl(path: string): string {
+  return `${API_URL}${path}`;
+}
+
 export class ApiError extends Error {
   status: number;
 
@@ -18,7 +24,10 @@ interface RequestOptions {
 }
 
 async function rawRequest(path: string, options: RequestOptions = {}): Promise<Response> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const isFormData = options.body instanceof FormData;
+  // Don't set Content-Type for FormData — the browser adds the multipart boundary itself, and
+  // an explicit header here would omit it and break the upload.
+  const headers: Record<string, string> = isFormData ? {} : { "Content-Type": "application/json" };
   const accessToken = getAccessToken();
   if (accessToken && !options.skipAuth) {
     headers.Authorization = `Bearer ${accessToken}`;
@@ -27,7 +36,7 @@ async function rawRequest(path: string, options: RequestOptions = {}): Promise<R
   return fetch(`${API_URL}${path}`, {
     method: options.method ?? "GET",
     headers,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body: isFormData ? (options.body as FormData) : options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
 }
 

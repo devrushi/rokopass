@@ -8,6 +8,7 @@ export interface UserProfile {
   firstName: string;
   lastName: string;
   role: string;
+  whatsappNumber: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -30,6 +31,7 @@ interface AuthContextValue {
     role?: "PARENT" | "PROVIDER";
   }) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -81,8 +83,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  async function refreshUser() {
+    const data = await apiRequest<{ user: UserProfile }>("/auth/me");
+    setUser(data.user);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
   );
 }
 

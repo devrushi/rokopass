@@ -20,3 +20,12 @@ export const loginSchema = z.object({
 export const refreshSchema = z.object({
   refreshToken: z.string().min(1, "refreshToken is required"),
 });
+
+export const updateProfileSchema = z.object({
+  // Loose E.164-ish check (leading +, 8-15 digits) — good enough to catch typos without being a
+  // full phone-number validation library. Used to build a wa.me deep link, not for SMS/calling.
+  whatsappNumber: z
+    .string()
+    .regex(/^\+[1-9]\d{7,14}$/, "Must be in international format, e.g. +441234567890")
+    .nullable(),
+});
