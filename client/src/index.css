@@ -47,3 +47,36 @@ h3 {
 .page-status {
   color: var(--text-muted);
 }
+
+.button {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.button--secondary {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: inherit;
+}
+
+.button--danger {
+  background: var(--danger);
+}
+
+.form__error {
+  color: var(--danger);
+  font-size: 0.9rem;
+}

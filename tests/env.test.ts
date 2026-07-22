@@ -8,6 +8,8 @@ const validEnv = {
   CORS_ORIGIN: "*",
   JWT_ACCESS_SECRET: "a".repeat(32),
   JWT_REFRESH_SECRET: "b".repeat(32),
+  STRIPE_SECRET_KEY: "sk_test_fake",
+  STRIPE_WEBHOOK_SECRET: "whsec_fake",
 };
 
 describe("envSchema", () => {
@@ -21,14 +23,22 @@ describe("envSchema", () => {
     expect(result.PORT).toBe(3000);
   });
 
-  it("defaults NODE_ENV, PORT, and CORS_ORIGIN when omitted", () => {
-    const { DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } = validEnv;
-    const result = envSchema.parse({ DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET });
+  it("defaults NODE_ENV, PORT, CORS_ORIGIN, and CLIENT_URL when omitted", () => {
+    const { DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET } =
+      validEnv;
+    const result = envSchema.parse({
+      DATABASE_URL,
+      JWT_ACCESS_SECRET,
+      JWT_REFRESH_SECRET,
+      STRIPE_SECRET_KEY,
+      STRIPE_WEBHOOK_SECRET,
+    });
     expect(result.NODE_ENV).toBe("development");
     expect(result.PORT).toBe(3000);
     expect(result.CORS_ORIGIN).toBe("*");
     expect(result.JWT_ACCESS_EXPIRES_IN).toBe("15m");
     expect(result.JWT_REFRESH_EXPIRES_IN).toBe("30d");
+    expect(result.CLIENT_URL).toBe("http://localhost:5173");
   });
 
   it("rejects a JWT secret shorter than 32 characters", () => {

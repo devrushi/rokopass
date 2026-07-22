@@ -7,14 +7,21 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { activitiesRouter } from "./routes/activities";
 import { ageGroupsRouter } from "./routes/ageGroups";
 import { authRouter } from "./routes/auth";
+import { billingRouter } from "./routes/billing";
 import { healthRouter } from "./routes/health";
 import { sessionsRouter } from "./routes/sessions";
+import { webhooksRouter } from "./routes/webhooks";
 
 export function createApp() {
   const app = express();
 
   app.use(helmet());
   app.use(cors({ origin: env.CORS_ORIGIN }));
+
+  // Must be mounted before express.json() — Stripe signature verification needs the raw,
+  // unparsed request body bytes.
+  app.use("/webhooks", express.raw({ type: "application/json" }), webhooksRouter);
+
   app.use(express.json());
   if (env.NODE_ENV !== "test") {
     app.use(morgan(env.NODE_ENV === "development" ? "dev" : "combined"));
@@ -25,6 +32,7 @@ export function createApp() {
   app.use("/activities", activitiesRouter);
   app.use("/sessions", sessionsRouter);
   app.use("/age-groups", ageGroupsRouter);
+  app.use("/billing", billingRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

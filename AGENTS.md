@@ -284,3 +284,127 @@ covered by tests) — worth knowing about if you touch this code:**
   (register as provider → create activity → add recurring schedule → see
   it on the calendar → cancel it) was driven in a real browser with
   screenshots reviewed and zero console errors.
+
+### 2026-07-22 — Step 4: Subscription Plans and Credit Engine
+
+**Built:**
+- `Plan` (name, description, monthlyCredits, priceGbp in pence,
+  `stripePriceId`), `Subscription` (one row per user — see decision below),
+  `CreditTransaction` (append-only ledger: `amount` + `reason` enum
+  `SUBSCRIPTION_INITIAL`/`SUBSCRIPTION_RENEWAL`/`BOOKING`/
+  `BOOKING_REFUND`/`ADMIN_ADJUSTMENT`), and `StripeEvent` (processed
+  webhook event IDs, for idempotency) models. `User` gained
+  `stripeCustomerId`.
+- `src/services/creditBalance.ts` — a user's balance is `SUM(amount)` over
+  their `CreditTransaction` rows, computed on read, not a mutable counter.
+  `getCreditSummary()` also returns their plan/status/renewal date.
+- `src/lib/stripe.ts` — the Stripe SDK singleton (`stripe` package v22.3.2,
+  pinned by whatever `npm install stripe` resolved on 2026-07-22 — this is
+  a very new major version with real API-shape differences from older
+  Stripe docs/tutorials, see below).
+- `POST /billing/checkout-session` (auth required, any role) — creates a
+  Stripe Customer on first use (cached on `User.stripeCustomerId`
+  thereafter) and a subscription-mode Checkout Session with
+  `ui_mode: "embedded_page"`, returning `clientSecret` for the frontend to
+  mount. `GET /billing/checkout-session/:id/status` backs the post-checkout
+  return page. `GET /billing/plans` (public), `GET /billing/credits`
+  (auth).
+- `POST /webhooks/stripe` (`src/routes/webhooks.ts`) — verifies the
+  `Stripe-Signature`, checks `StripeEvent` for the event ID before doing
+  anything (skips duplicates), dispatches to
+  `src/services/subscriptionSync.ts`, then records the event ID.
+  Handles `checkout.session.completed` (links the subscription, grants
+  `plan.monthlyCredits` as `SUBSCRIPTION_INITIAL`),
+  `invoice.paid` (grants `SUBSCRIPTION_RENEWAL` credits, **but only** when
+  `billing_reason === "subscription_cycle"` — the *first* invoice has
+  `billing_reason: "subscription_create"` and is intentionally skipped
+  here since `checkout.session.completed` already granted those credits;
+  granting on both would double-credit every new subscriber), and
+  `customer.subscription.updated`/`.deleted` (status/period sync).
+- Frontend: `Plans` page (public plan list, "Subscribe" → navigates to
+  `/billing/checkout/:planId`), `Checkout` page (mounts Stripe's
+  `EmbeddedCheckoutProvider`/`EmbeddedCheckout` using a `fetchClientSecret`
+  callback against the endpoint above), `BillingReturn` page (the
+  `return_url` target — confirms the session status and links to the
+  dashboard). Dashboard now shows the credit balance/plan/renewal date, or
+  a "View plans" prompt if unsubscribed. `.button`/`.form__error` styles
+  moved from `provider.css` into `index.css` since they're generic, not
+  provider-specific — reuse those classes rather than redefining button
+  styles per page.
+- `prisma/seed.ts` now also seeds three `Plan` rows (Starter/Family/
+  Unlimited). In real dev, it creates matching Stripe Products/Prices via
+  the API (idempotent via a `lookup_key`, safe to re-run). In `NODE_ENV=test`
+  it skips the network call entirely and fabricates a fake price ID — see
+  decision below.
+
+**This SDK version's API shape differs from most Stripe tutorials/docs
+you'll find — three drifts that cost real debugging time, worth knowing
+before touching this code:**
+- `ui_mode` for embedded Checkout is `"embedded_page"`, not `"embedded"`.
+  (`"embedded"` isn't a valid value in this API version — the type is
+  `'elements' | 'embedded_page' | 'form' | 'hosted_page'`.)
+- `Subscription.current_period_end` **does not exist** at the top level
+  anymore — it moved to each `SubscriptionItem`
+  (`subscription.items.data[0].current_period_end`). See `periodEndOf()`
+  in `subscriptionSync.ts`.
+- `Invoice.subscription` **does not exist** at the top level either — the
+  subscription ID is under `invoice.parent.subscription_details.subscription`.
+  Same for `Invoice.subscription` generally; Stripe restructured invoices
+  around a `parent` object for what generated them.
+  **Before assuming any Stripe field/type from memory or an older
+  tutorial, grep the actual installed `.d.ts` files in
+  `node_modules/stripe/cjs/resources/` first** — this API has moved fast.
+
+**Conventions/decisions for future steps:**
+- **`Subscription` is one row per user, mutated in place — not versioned
+  per Stripe subscription.** Switching plans updates the existing row;
+  there's no history of past subscriptions beyond "current state." Fine
+  for a single-active-plan-per-user product; revisit if RokidsPass ever
+  needs subscription history/audit beyond the credit ledger itself.
+- **Credits are a ledger, not a counter**, specifically so Step 5's
+  booking-time deduction can insert a `CreditTransaction` (`reason:
+  "BOOKING"`, negative `amount`) without racing a concurrent renewal
+  grant — both are just inserts, no read-modify-write. Step 5 should
+  follow this pattern (insert a transaction, don't decrement a field) and
+  will want a DB-level check (e.g. a constraint or a transaction that
+  verifies balance ≥ cost before inserting) to prevent overdraft under
+  concurrency — not built yet, that's Step 5's "concurrency checks" ask.
+- **CI/test never calls the real Stripe API.** `STRIPE_SECRET_KEY` in CI
+  is a placeholder string; `prisma/seed.ts` checks `NODE_ENV` and skips
+  live Product/Price creation in test; and all route/webhook tests mock
+  `../lib/stripe` via `vi.mock` + `vi.hoisted()` rather than hitting the
+  network. Follow this pattern for any new Stripe-touching code — don't
+  make CI depend on live Stripe credentials.
+- The webhook route is mounted with `express.raw({ type: "application/json" })`
+  **before** the global `express.json()` in `app.ts` — signature
+  verification needs the exact raw bytes. If you add more webhook-style
+  routes (raw body required), mount them the same way, before the global
+  JSON parser, not after.
+
+**Flag for whoever picks this up next:**
+- **Not verified against live Stripe.** I set up Stripe CLI (`~/bin/stripe`,
+  installed via direct GitHub release since Homebrew's bottle wanted a
+  newer Xcode than what's installed) and started a `stripe login` flow,
+  but the user opted to skip completing it for this session. Everything
+  above is verified via mocked unit/integration tests (module-level Stripe
+  SDK mocks) and clean type-checks/builds only — **no real checkout
+  session, webhook delivery, or Stripe CLI `trigger` has actually been
+  exercised.** Before shipping this, run `stripe login`, `stripe listen
+  --forward-to localhost:3000/webhooks/stripe` to get a real
+  `STRIPE_WEBHOOK_SECRET`, and `stripe trigger checkout.session.completed`
+  (plus a real embedded-checkout run in the browser) to confirm the whole
+  path actually works end-to-end, not just its unit-tested parts.
+- Real Stripe test-mode keys still need to go in `.env`
+  (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) and `client/.env`
+  (`VITE_STRIPE_PUBLISHABLE_KEY`) — currently placeholder values that will
+  make any real Stripe API call fail.
+- No plan-switching or cancellation UI — a user can subscribe but can't
+  currently downgrade/upgrade/cancel from the app (would need a Stripe
+  Billing Portal session or custom UI calling `stripe.subscriptions.update`/
+  `.cancel`).
+- No refund handling beyond the `BOOKING_REFUND` ledger reason existing as
+  an enum value — nothing creates that transaction yet; that's Step 5's
+  concern when a booking is cancelled.
+- Verified: 59 backend tests green (`npm test` — 12 new tests across
+  `creditBalance.test.ts`, `webhooks.test.ts`, `billing.test.ts`, all
+  using mocked Stripe calls), both root and client builds clean.

@@ -29,3 +29,19 @@ export interface ClassSession {
   capacity: number;
   isCancelled: boolean;
 }
+
+export interface Plan {
+  id: string;
+  name: string;
+  description: string;
+  monthlyCredits: number;
+  priceGbp: number;
+  isActive: boolean;
+}
+
+export interface CreditSummary {
+  balance: number;
+  plan: { id: string; name: string; monthlyCredits: number } | null;
+  subscriptionStatus: string | null;
+  currentPeriodEnd: string | null;
+}

@@ -27,10 +27,13 @@ model User {
   lastName           String
   role               UserRole                     @default(PARENT)
   verificationStatus ProviderVerificationStatus?
+  stripeCustomerId   String?                      @unique
   createdAt          DateTime                     @default(now())
   updatedAt          DateTime                     @updatedAt
 
-  activities Activity[]
+  activities         Activity[]
+  subscription       Subscription?
+  creditTransactions CreditTransaction[]
 }
 
 model AgeGroup {
@@ -106,4 +109,79 @@ model ClassSession {
 
   @@unique([recurringScheduleId, startsAt])
   @@index([activityId, startsAt])
+}
+
+model Plan {
+  id             String   @id @default(uuid())
+  name           String   @unique
+  description    String
+  monthlyCredits Int
+  priceGbp       Int // pence, e.g. 2999 = £29.99
+  stripePriceId  String   @unique
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+enum SubscriptionStatus {
+  INCOMPLETE
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}
+
+// One row per user, mutated over its lifecycle rather than versioned per Stripe subscription —
+// this platform supports a single active plan per user at a time. Switching plans updates this
+// row rather than creating a new one, so subscription history beyond "current state" isn't
+// retained. See AGENTS.md if that changes.
+model Subscription {
+  id                   String             @id @default(uuid())
+  userId               String             @unique
+  user                 User               @relation(fields: [userId], references: [id])
+  planId               String
+  plan                 Plan               @relation(fields: [planId], references: [id])
+  stripeSubscriptionId String             @unique
+  status               SubscriptionStatus @default(INCOMPLETE)
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  creditTransactions CreditTransaction[]
+}
+
+enum CreditTransactionReason {
+  SUBSCRIPTION_INITIAL
+  SUBSCRIPTION_RENEWAL
+  BOOKING
+  BOOKING_REFUND
+  ADMIN_ADJUSTMENT
+}
+
+// A user's credit balance is the sum of their transactions, not a mutable counter — an
+// append-only ledger avoids lost updates under concurrent writes and keeps a full audit trail
+// of every grant/deduction. See src/services/creditBalance.ts.
+model CreditTransaction {
+  id             String                   @id @default(uuid())
+  userId         String
+  user           User                     @relation(fields: [userId], references: [id])
+  subscriptionId String?
+  subscription   Subscription?            @relation(fields: [subscriptionId], references: [id])
+  amount         Int
+  reason         CreditTransactionReason
+  createdAt      DateTime                 @default(now())
+
+  @@index([userId])
+}
+
+// Processed Stripe webhook event IDs, so a retried delivery (Stripe retries on non-2xx/timeout,
+// and "at least once" delivery means duplicates are possible even without a retry) never gets
+// applied twice.
+model StripeEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
 }

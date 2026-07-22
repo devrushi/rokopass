@@ -1,8 +1,11 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { BillingReturn } from "./pages/BillingReturn";
+import { Checkout } from "./pages/Checkout";
 import { Dashboard } from "./pages/Dashboard";
 import { Login } from "./pages/Login";
+import { Plans } from "./pages/Plans";
 import { ActivitiesList } from "./pages/provider/ActivitiesList";
 import { ActivityDetail } from "./pages/provider/ActivityDetail";
 import { ActivityForm } from "./pages/provider/ActivityForm";
@@ -20,6 +23,30 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/plans"
+          element={
+            <ProtectedRoute>
+              <Plans />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/billing/checkout/:planId"
+          element={
+            <ProtectedRoute>
+              <Checkout />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/billing/return"
+          element={
+            <ProtectedRoute>
+              <BillingReturn />
             </ProtectedRoute>
           }
         />
