@@ -838,3 +838,32 @@ were driven in a real browser (tokens minted directly for the existing
 admin/provider/parent accounts, one isolated browser context per role) —
 zero console errors, real data rendered correctly, and the rounding bug
 above was caught and fixed by this pass, not by eyeballing the code.
+
+### 2026-07-22 — Dev Quick Login Buttons
+
+Testing convenience: one-click login for each role on the login page,
+requested to avoid re-typing credentials while manually testing.
+
+**Built:**
+- Two new seeded accounts in `prisma/seed.ts` — `seedDemoAccounts()`
+  creates `demo.parent@rokidspass.local` / `DemoParent123` (`PARENT`) and
+  `demo.provider@rokidspass.local` / `DemoProvider123` (`PROVIDER`,
+  pre-set to `verificationStatus: APPROVED` so it's immediately visible
+  to parents browsing, not stuck behind admin moderation). Runs in
+  `main()` alongside `seedAdmin()`, before the Stripe-dependent
+  `seedPlans()`, so it isn't affected by that step's placeholder-key
+  failure (see the Final Step entry).
+- Three buttons on `Login.tsx` — Parent / Activity Provider / Admin —
+  each calling the normal `login()` with one of the seeded accounts'
+  credentials, hardcoded in a `QUICK_LOGINS` array. Gated behind
+  `import.meta.env.DEV`, so the whole section (buttons and credentials)
+  is compiled out of a production build, not just hidden by CSS.
+- No new backend endpoint — this reuses `POST /auth/login` exactly as
+  the real form does, just with baked-in credentials, so it can't
+  introduce an auth bypass distinct from "knowing a password."
+
+**Verified:** seed re-run confirmed via direct DB query; full backend
+suite still 106/106; frontend build clean. Each of the three buttons was
+clicked in an isolated browser context and confirmed to land on the
+correct role's dashboard (`/dashboard`, `/provider`, `/admin`) with zero
+console errors.

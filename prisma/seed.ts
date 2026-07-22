@@ -10,6 +10,14 @@ const prisma = new PrismaClient();
 const ADMIN_EMAIL = "admin@rokidspass.local";
 const ADMIN_PASSWORD = "AdminPassword123";
 
+// Dev-only demo accounts backing the "Quick login" buttons on the login page (client only
+// renders those buttons in dev builds — see Login.tsx). Same throwaway-credential caveat as
+// the admin account above.
+const DEMO_PARENT_EMAIL = "demo.parent@rokidspass.local";
+const DEMO_PARENT_PASSWORD = "DemoParent123";
+const DEMO_PROVIDER_EMAIL = "demo.provider@rokidspass.local";
+const DEMO_PROVIDER_PASSWORD = "DemoProvider123";
+
 const AGE_GROUPS = [
   { label: "Toddlers (1-2)", minAge: 1, maxAge: 2 },
   { label: "Preschool (3-4)", minAge: 3, maxAge: 4 },
@@ -130,12 +138,47 @@ async function seedAdmin() {
   console.log(`Seeded admin user: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD} (dev only — do not use in production)`);
 }
 
+async function seedDemoAccounts() {
+  const parentPasswordHash = await hashPassword(DEMO_PARENT_PASSWORD);
+  await prisma.user.upsert({
+    where: { email: DEMO_PARENT_EMAIL },
+    update: {},
+    create: {
+      email: DEMO_PARENT_EMAIL,
+      passwordHash: parentPasswordHash,
+      firstName: "Demo",
+      lastName: "Parent",
+      role: "PARENT",
+    },
+  });
+
+  const providerPasswordHash = await hashPassword(DEMO_PROVIDER_PASSWORD);
+  await prisma.user.upsert({
+    where: { email: DEMO_PROVIDER_EMAIL },
+    update: {},
+    create: {
+      email: DEMO_PROVIDER_EMAIL,
+      passwordHash: providerPasswordHash,
+      firstName: "Demo",
+      lastName: "Provider",
+      role: "PROVIDER",
+      // Pre-approved so the demo login can exercise the full provider flow (visible to parents
+      // browsing activities) without an admin having to approve it first.
+      verificationStatus: "APPROVED",
+    },
+  });
+
+  console.log(`Seeded demo parent: ${DEMO_PARENT_EMAIL} / ${DEMO_PARENT_PASSWORD} (dev only)`);
+  console.log(`Seeded demo provider: ${DEMO_PROVIDER_EMAIL} / ${DEMO_PROVIDER_PASSWORD} (dev only)`);
+}
+
 async function main() {
   // Order matters: seedPlans() needs live Stripe credentials and is the one seed step that can
   // fail in an environment without real keys configured — run it last so a Stripe failure
-  // doesn't prevent the (Stripe-independent) age groups and admin user from being seeded.
+  // doesn't prevent the (Stripe-independent) age groups and demo/admin users from being seeded.
   await seedAgeGroups();
   await seedAdmin();
+  await seedDemoAccounts();
   await seedPlans();
 }
 

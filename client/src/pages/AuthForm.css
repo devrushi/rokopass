@@ -53,3 +53,32 @@
   font-size: 0.9rem;
   color: var(--text-muted);
 }
+
+.auth-form__quick-logins {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--border);
+}
+
+.auth-form__quick-logins-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
+}
+
+.auth-form__quick-logins-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.auth-form__quick-logins-row button {
+  margin-top: 0;
+  flex: 1;
+  padding: 0.5rem 0.6rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: inherit;
+  font-weight: 500;
+  font-size: 0.85rem;
+}
