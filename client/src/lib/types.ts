@@ -55,7 +55,13 @@ export interface Child {
   dateOfBirth: string;
 }
 
-export type BookingStatus = "CONFIRMED" | "CANCELLED" | "ATTENDED" | "NO_SHOW";
+export type BookingStatus =
+  | "PENDING_APPROVAL"
+  | "CONFIRMED"
+  | "CANCELLED"
+  | "REJECTED"
+  | "ATTENDED"
+  | "NO_SHOW";
 
 export interface Booking {
   id: string;
@@ -76,6 +82,20 @@ export interface AttendeeBooking {
   status: BookingStatus;
   child: { id: string; firstName: string; lastName: string };
   parent: { id: string; firstName: string; lastName: string; email: string };
+}
+
+export interface PendingBooking {
+  id: string;
+  status: BookingStatus;
+  creditsSpent: number;
+  createdAt: string;
+  child: { id: string; firstName: string; lastName: string };
+  parent: { id: string; firstName: string; lastName: string; email: string };
+  session: {
+    id: string;
+    startsAt: string;
+    activity: { id: string; title: string };
+  };
 }
 
 export type ProviderVerificationStatus = "PENDING" | "APPROVED" | "REJECTED";

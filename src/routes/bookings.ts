@@ -5,7 +5,7 @@ import { AppError } from "../middleware/errorHandler";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireRole } from "../middleware/requireRole";
 import { createBookingSchema, updateBookingStatusSchema } from "../schemas/bookings";
-import { cancelBooking, createBooking } from "../services/booking";
+import { approveBooking, cancelBooking, createBooking, rejectBooking } from "../services/booking";
 import { getCreditBalance } from "../services/creditBalance";
 
 export const bookingsRouter = Router();
@@ -25,6 +25,31 @@ bookingsRouter.get("/mine", requireAuth, requireRole("PARENT", "ADMIN"), async (
     next(err);
   }
 });
+
+bookingsRouter.get(
+  "/pending-approval",
+  requireAuth,
+  requireRole("PROVIDER", "ADMIN"),
+  async (req, res, next) => {
+    try {
+      const bookings = await prisma.booking.findMany({
+        where: {
+          status: "PENDING_APPROVAL",
+          ...(req.user!.role === "ADMIN" ? {} : { session: { activity: { providerId: req.user!.sub } } }),
+        },
+        include: {
+          child: { select: { id: true, firstName: true, lastName: true } },
+          parent: { select: { id: true, firstName: true, lastName: true, email: true } },
+          session: { include: { activity: { select: { id: true, title: true } } } },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      res.json({ bookings });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 bookingsRouter.post("/", requireAuth, requireRole("PARENT", "ADMIN"), async (req, res, next) => {
   try {
@@ -63,6 +88,42 @@ bookingsRouter.delete("/:id", requireAuth, requireRole("PARENT", "ADMIN"), async
     next(err);
   }
 });
+
+bookingsRouter.post(
+  "/:id/approve",
+  requireAuth,
+  requireRole("PROVIDER", "ADMIN"),
+  async (req, res, next) => {
+    try {
+      const booking = await approveBooking({
+        bookingId: param(req.params.id),
+        providerId: req.user!.sub,
+        role: req.user!.role,
+      });
+      res.json({ booking });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+bookingsRouter.post(
+  "/:id/reject",
+  requireAuth,
+  requireRole("PROVIDER", "ADMIN"),
+  async (req, res, next) => {
+    try {
+      const booking = await rejectBooking({
+        bookingId: param(req.params.id),
+        providerId: req.user!.sub,
+        role: req.user!.role,
+      });
+      res.json({ booking });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 bookingsRouter.patch(
   "/:id/status",

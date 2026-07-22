@@ -55,7 +55,10 @@ sessionsRouter.get(
       }
 
       const bookings = await prisma.booking.findMany({
-        where: { sessionId: session.id, status: { in: ["CONFIRMED", "ATTENDED", "NO_SHOW"] } },
+        where: {
+          sessionId: session.id,
+          status: { in: ["PENDING_APPROVAL", "CONFIRMED", "ATTENDED", "NO_SHOW"] },
+        },
         include: {
           child: { select: { id: true, firstName: true, lastName: true } },
           parent: { select: { id: true, firstName: true, lastName: true, email: true } },

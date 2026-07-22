@@ -65,10 +65,11 @@ export function ActivityBrowseDetail() {
 
       {confirmation && (
         <div className="booking-confirmation">
-          <h2>Booking confirmed!</h2>
+          <h2>Booking requested!</h2>
           <p>
-            {confirmation.child.firstName} is booked in for{" "}
-            {new Date(confirmation.session.startsAt).toLocaleString()}.
+            {confirmation.child.firstName}'s spot for{" "}
+            {new Date(confirmation.session.startsAt).toLocaleString()} is awaiting the provider's
+            approval. Your credits are held until they respond.
           </p>
           <Link to="/bookings" className="button">
             View my bookings

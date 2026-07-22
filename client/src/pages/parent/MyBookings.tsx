@@ -50,7 +50,7 @@ export function MyBookings() {
                     {new Date(booking.session.startsAt).toLocaleString()} · {booking.status}
                   </div>
                 </div>
-                {booking.status === "CONFIRMED" && !isPast && (
+                {(booking.status === "CONFIRMED" || booking.status === "PENDING_APPROVAL") && !isPast && (
                   <button
                     type="button"
                     className="button button--secondary"

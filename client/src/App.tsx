@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { HomeRedirect } from "./components/HomeRedirect";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ActivityModeration } from "./pages/admin/ActivityModeration";
@@ -15,6 +16,7 @@ import { Plans } from "./pages/Plans";
 import { ActivitiesList } from "./pages/provider/ActivitiesList";
 import { ActivityDetail } from "./pages/provider/ActivityDetail";
 import { ActivityForm } from "./pages/provider/ActivityForm";
+import { ProviderDashboard } from "./pages/provider/ProviderDashboard";
 import { Roster } from "./pages/provider/Roster";
 import { Register } from "./pages/Register";
 
@@ -22,7 +24,7 @@ export default function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route
@@ -86,6 +88,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={["PARENT", "ADMIN"]}>
               <MyBookings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/provider"
+          element={
+            <ProtectedRoute roles={["PROVIDER", "ADMIN"]}>
+              <ProviderDashboard />
             </ProtectedRoute>
           }
         />

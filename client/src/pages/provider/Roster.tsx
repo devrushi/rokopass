@@ -32,6 +32,19 @@ export function Roster() {
     }
   }
 
+  async function decide(bookingId: string, decision: "approve" | "reject") {
+    setUpdatingId(bookingId);
+    setError(null);
+    try {
+      await apiRequest(`/bookings/${bookingId}/${decision}`, { method: "POST" });
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : `Failed to ${decision} booking`);
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
   return (
     <div className="provider-page">
       <h1>Class roster</h1>
@@ -53,6 +66,26 @@ export function Roster() {
                   {booking.status}
                 </div>
               </div>
+              {booking.status === "PENDING_APPROVAL" && (
+                <div className="session-row__actions">
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={updatingId === booking.id}
+                    onClick={() => decide(booking.id, "approve")}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    className="button button--danger"
+                    disabled={updatingId === booking.id}
+                    onClick={() => decide(booking.id, "reject")}
+                  >
+                    Reject
+                  </button>
+                </div>
+              )}
               {booking.status === "CONFIRMED" && (
                 <div className="session-row__actions">
                   <button

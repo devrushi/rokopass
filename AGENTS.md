@@ -30,8 +30,13 @@ below) is complete end-to-end for that core loop:
   race each other.
 - **Booking & attendance** — booking a child into a session is one
   `SERIALIZABLE` Postgres transaction (capacity check + credit deduction
-  together), retried on write-conflict; providers get a roster per session
-  and can mark attendance.
+  together), retried on write-conflict. Bookings are a **request/approval
+  flow, not instant**: a booking starts `PENDING_APPROVAL` with credits
+  already held, and the provider must approve (→ `CONFIRMED`) or reject
+  (→ `REJECTED`, credits refunded) before it's a confirmed spot. Providers
+  get both a per-session roster and a dashboard (`/provider`) aggregating
+  every pending booking across all their activities in one place, and can
+  mark attendance once confirmed.
 - **Moderation** — providers start `PENDING` and are invisible in public
   listings until an admin approves them (activity creation itself isn't
   blocked, only public visibility); admins can flag (hide) or feature
@@ -608,3 +613,88 @@ before touching this code:**
   → admin flags the activity (confirmed invisible again) → audit log
   shows both actions — was driven across three isolated real-browser
   sessions (admin/provider/parent) with zero console errors.
+
+### 2026-07-22 — Provider Dashboard and Booking Approval Workflow
+
+Post-launch enhancement, requested after the initial six steps closed:
+a landing page for providers, and a real approval step before a booking
+counts as confirmed (previously bookings were instant).
+
+**Built:**
+- **`BookingStatus` gained `PENDING_APPROVAL` (new default) and
+  `REJECTED`.** `createBooking()` still does the capacity check + credit
+  deduction in one `SERIALIZABLE` transaction exactly as before, but now
+  creates the booking as `PENDING_APPROVAL` — credits are held at request
+  time, not confirmation time, specifically so the concurrency-safe
+  transaction shape from Step 5 didn't need to change. The capacity count
+  now counts `PENDING_APPROVAL` + `CONFIRMED` together (a "holding" a
+  slot), so a pile of unanswered requests can still fill a class.
+- `approveBooking()`/`rejectBooking()` in `src/services/booking.ts` —
+  approve is a pure status change; reject flips to `REJECTED` and issues a
+  `BOOKING_REFUND` transaction (the same mechanism `cancelBooking` already
+  used). Both send a decision email. `cancelBooking()` now accepts
+  cancelling from either `PENDING_APPROVAL` or `CONFIRMED`.
+- Routes: `POST /bookings/:id/approve`, `POST /bookings/:id/reject`
+  (ownership-checked, `ADMIN` bypasses — this was missing from the first
+  pass and had to be added to the service layer, not just the route, to
+  match the ownership-check pattern used everywhere else in this codebase),
+  and `GET /bookings/pending-approval` (aggregates pending bookings across
+  *all* of a provider's activities — the query the dashboard needs and no
+  existing endpoint could answer). `GET /sessions/:id/attendees` now
+  includes `PENDING_APPROVAL` bookings so the per-session roster shows
+  them too, with the same approve/reject actions as the dashboard.
+- Frontend: `ProviderDashboard` (`/provider`) — pending-approval list with
+  inline approve/reject, plus a compact activities summary. Signed-in
+  providers now land here instead of the generic parent-oriented
+  `/dashboard` (new `HomeRedirect` component reads the user's role and
+  picks the destination for `/` and any unmatched route). `Roster.tsx`,
+  `MyBookings.tsx`, and the booking confirmation copy in
+  `ActivityBrowseDetail.tsx` all updated for the new pending state
+  ("Booking requested!" instead of "Booking confirmed!", credits noted as
+  "held" not spent outright).
+
+**Conventions/decisions for future steps:**
+- **Credits are deducted at request time, refunded on rejection** — not
+  "deducted on approval." This was a deliberate choice to avoid touching
+  the SERIALIZABLE booking transaction's shape (capacity + balance check
+  + deduction all had to stay atomic together); approval/rejection are
+  separate, simpler operations that don't need that isolation level
+  themselves (no concurrent-write-skew risk in a single-row status flip).
+- **Adding two enum values to a Postgres enum and using one as a column
+  default cannot happen in the same migration/transaction** — Postgres
+  requires new enum values to be committed first. Hit this directly:
+  `ALTER TYPE ... ADD VALUE` + `ALTER COLUMN ... SET DEFAULT` in one
+  `migration.sql` failed with `55P04 unsafe use of new value`. Fixed by
+  splitting into two migrations (add values, then a separate migration to
+  set the default). If a future step adds enum values *and* wants to use
+  them immediately (as a default, in a backfill, etc.), split it the same
+  way from the start rather than discovering the error at deploy time.
+- Hardcoded post-login redirects (`navigate("/dashboard")` in `Login.tsx`
+  and `Register.tsx`) don't compose with role-aware landing pages — had to
+  change both to `navigate("/")` and let `HomeRedirect` decide. Any new
+  auth-adjacent redirect should go through `"/"` for the same reason,
+  rather than hardcoding a destination.
+
+**Flag for whoever picks this up next:**
+- List pages here (dashboard, roster, my-bookings) fetch once on mount and
+  don't auto-refresh — a provider sitting on `/provider` won't see a new
+  booking request appear without navigating away and back or reloading.
+  This is consistent with every other list page in the app (not a new
+  gap), but it's more noticeable here since approvals are time-sensitive.
+  Worth polling or adding a manual refresh affordance before this feels
+  production-ready.
+- No notification (email or otherwise) tells a provider a new booking is
+  waiting — they only find out by visiting the dashboard. Combined with
+  the no-auto-refresh point above, a provider could plausibly miss pending
+  requests for a while.
+- Verified: 85 backend tests green (14 new: approve/reject success and
+  ownership checks, refund-on-reject, `GET /bookings/pending-approval`
+  scoping, the roster showing pending bookings, and that attendance can't
+  be marked until approved), both builds clean. Full flow — provider
+  registers and lands directly on `/provider` → admin approves the
+  provider → provider creates an activity/schedule → parent books (sees
+  "Booking requested!") → provider's dashboard shows it and approves it
+  → parent sees `CONFIRMED` → a second booking gets rejected and the
+  credit refund is verified directly against the ledger (balance math
+  checked, not just eyeballed) → parent sees `REJECTED` — was driven
+  across three isolated real-browser sessions with zero console errors.

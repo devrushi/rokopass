@@ -134,15 +134,19 @@ model Child {
 }
 
 enum BookingStatus {
+  PENDING_APPROVAL
   CONFIRMED
   CANCELLED
+  REJECTED
   ATTENDED
   NO_SHOW
 }
 
-// A booking transactionally pairs a capacity check (session.capacity vs. CONFIRMED bookings)
-// with a credit deduction (a CreditTransaction insert) — see src/services/booking.ts for the
-// concurrency-safe transaction that creates these together.
+// A booking transactionally pairs a capacity check (session.capacity vs. PENDING_APPROVAL +
+// CONFIRMED bookings) with a credit deduction (a CreditTransaction insert) — see
+// src/services/booking.ts. Credits are deducted up front at request time, not at approval time,
+// so the capacity/balance check stays inside the one SERIALIZABLE transaction; approving is a
+// pure status change, rejecting/cancelling refunds via a BOOKING_REFUND transaction.
 model Booking {
   id           String        @id @default(uuid())
   childId      String
@@ -151,7 +155,7 @@ model Booking {
   session      ClassSession  @relation(fields: [sessionId], references: [id])
   parentId     String
   parent       User          @relation(fields: [parentId], references: [id])
-  status       BookingStatus @default(CONFIRMED)
+  status       BookingStatus @default(PENDING_APPROVAL)
   creditsSpent Int
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt

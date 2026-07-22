@@ -119,7 +119,7 @@ describe("POST /bookings", () => {
       .send({ childId, sessionId });
 
     expect(res.status).toBe(201);
-    expect(res.body.booking).toMatchObject({ status: "CONFIRMED", creditsSpent: 3 });
+    expect(res.body.booking).toMatchObject({ status: "PENDING_APPROVAL", creditsSpent: 3 });
     expect(res.body.balance).toBe(2);
 
     // Confirmation email is sent after the transaction commits, not inside it — wait briefly.
@@ -206,8 +206,10 @@ describe("POST /bookings", () => {
     const statuses = [resA.status, resB.status].sort();
     expect(statuses).toEqual([201, 409]);
 
-    const confirmedCount = await prisma.booking.count({ where: { sessionId, status: "CONFIRMED" } });
-    expect(confirmedCount).toBe(1);
+    const holdingCount = await prisma.booking.count({
+      where: { sessionId, status: { in: ["PENDING_APPROVAL", "CONFIRMED"] } },
+    });
+    expect(holdingCount).toBe(1);
   });
 
   it("rejects booking a cancelled session", async () => {
@@ -279,8 +281,103 @@ describe("DELETE /bookings/:id (cancel)", () => {
   });
 });
 
+describe("booking approval workflow", () => {
+  it("lists a provider's pending bookings, scoped to their own activities", async () => {
+    const { token, childId } = await makeParentWithCredits(5);
+    const { sessionId } = await makeActivityWithSession({ capacity: 5, creditCost: 1 });
+
+    const bookRes = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ childId, sessionId });
+
+    const ownRes = await request(app)
+      .get("/bookings/pending-approval")
+      .set("Authorization", `Bearer ${providerToken}`);
+    expect(ownRes.status).toBe(200);
+    expect(ownRes.body.bookings.some((b: { id: string }) => b.id === bookRes.body.booking.id)).toBe(true);
+
+    const otherRes = await request(app)
+      .get("/bookings/pending-approval")
+      .set("Authorization", `Bearer ${otherProviderToken}`);
+    expect(otherRes.body.bookings.some((b: { id: string }) => b.id === bookRes.body.booking.id)).toBe(false);
+  });
+
+  it("approving a booking confirms it without touching credits", async () => {
+    const { token, childId, id: parentId } = await makeParentWithCredits(5);
+    const { sessionId } = await makeActivityWithSession({ capacity: 5, creditCost: 2 });
+
+    const bookRes = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ childId, sessionId });
+    expect(await getCreditBalance(parentId)).toBe(3);
+
+    const approveRes = await request(app)
+      .post(`/bookings/${bookRes.body.booking.id}/approve`)
+      .set("Authorization", `Bearer ${providerToken}`);
+    expect(approveRes.status).toBe(200);
+    expect(approveRes.body.booking.status).toBe("CONFIRMED");
+    expect(await getCreditBalance(parentId)).toBe(3);
+  });
+
+  it("rejecting a booking refunds the credits", async () => {
+    const { token, childId, id: parentId } = await makeParentWithCredits(5);
+    const { sessionId } = await makeActivityWithSession({ capacity: 5, creditCost: 2 });
+
+    const bookRes = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ childId, sessionId });
+    expect(await getCreditBalance(parentId)).toBe(3);
+
+    const rejectRes = await request(app)
+      .post(`/bookings/${bookRes.body.booking.id}/reject`)
+      .set("Authorization", `Bearer ${providerToken}`);
+    expect(rejectRes.status).toBe(200);
+    expect(rejectRes.body.booking.status).toBe("REJECTED");
+    expect(await getCreditBalance(parentId)).toBe(5);
+  });
+
+  it("forbids a non-owning provider from approving or rejecting", async () => {
+    const { token, childId } = await makeParentWithCredits(5);
+    const { sessionId } = await makeActivityWithSession({ capacity: 5, creditCost: 1 });
+    const bookRes = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ childId, sessionId });
+
+    const approveRes = await request(app)
+      .post(`/bookings/${bookRes.body.booking.id}/approve`)
+      .set("Authorization", `Bearer ${otherProviderToken}`);
+    expect(approveRes.status).toBe(403);
+
+    const rejectRes = await request(app)
+      .post(`/bookings/${bookRes.body.booking.id}/reject`)
+      .set("Authorization", `Bearer ${otherProviderToken}`);
+    expect(rejectRes.status).toBe(403);
+  });
+
+  it("cannot approve or reject a booking that isn't pending", async () => {
+    const { token, childId } = await makeParentWithCredits(5);
+    const { sessionId } = await makeActivityWithSession({ capacity: 5, creditCost: 1 });
+    const bookRes = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ childId, sessionId });
+    await request(app)
+      .post(`/bookings/${bookRes.body.booking.id}/approve`)
+      .set("Authorization", `Bearer ${providerToken}`);
+
+    const res = await request(app)
+      .post(`/bookings/${bookRes.body.booking.id}/approve`)
+      .set("Authorization", `Bearer ${providerToken}`);
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("GET /sessions/:id/attendees and attendance status", () => {
-  it("lets the owning provider see the roster and mark attendance", async () => {
+  it("shows pending and confirmed bookings on the roster, and only lets attendance be marked once approved", async () => {
     const { token, childId } = await makeParentWithCredits(5);
     const { sessionId } = await makeActivityWithSession({ capacity: 5, creditCost: 1 });
 
@@ -294,7 +391,17 @@ describe("GET /sessions/:id/attendees and attendance status", () => {
       .set("Authorization", `Bearer ${providerToken}`);
     expect(rosterRes.status).toBe(200);
     expect(rosterRes.body.bookings).toHaveLength(1);
-    expect(rosterRes.body.bookings[0].child.id).toBe(childId);
+    expect(rosterRes.body.bookings[0]).toMatchObject({ status: "PENDING_APPROVAL" });
+
+    const attendedTooEarlyRes = await request(app)
+      .patch(`/bookings/${bookRes.body.booking.id}/status`)
+      .set("Authorization", `Bearer ${providerToken}`)
+      .send({ status: "ATTENDED" });
+    expect(attendedTooEarlyRes.status).toBe(400);
+
+    await request(app)
+      .post(`/bookings/${bookRes.body.booking.id}/approve`)
+      .set("Authorization", `Bearer ${providerToken}`);
 
     const statusRes = await request(app)
       .patch(`/bookings/${bookRes.body.booking.id}/status`)

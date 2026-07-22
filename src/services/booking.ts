@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/errorHandler";
 
 const MAX_SERIALIZATION_RETRIES = 3;
+const HOLDING_STATUSES = ["PENDING_APPROVAL", "CONFIRMED"] as const;
 
 function isSerializationError(err: unknown): boolean {
   // P2034: "Transaction failed due to a write conflict or a deadlock" — Postgres SERIALIZABLE
@@ -18,7 +19,13 @@ interface CreateBookingParams {
 }
 
 /**
- * Books a child into a session, deducting credits, inside a single SERIALIZABLE transaction.
+ * Requests a booking for a child, deducting credits up front, inside a single SERIALIZABLE
+ * transaction. Bookings start life as PENDING_APPROVAL — the provider must approve or reject
+ * before it counts as a confirmed spot (approveBooking/rejectBooking below). Credits are
+ * deducted at request time rather than at approval time specifically so the capacity/balance
+ * check and the deduction stay inside the same transaction; rejecting refunds via
+ * BOOKING_REFUND, the same mechanism cancelBooking already used.
+ *
  * Capacity and credit-balance checks read committed state that could otherwise change between
  * the check and the write under concurrent requests (two parents racing for the last spot; a
  * booking racing a renewal grant) — SERIALIZABLE makes Postgres detect that and abort one side,
@@ -30,7 +37,7 @@ export async function createBooking(params: CreateBookingParams) {
   for (let attempt = 0; attempt < MAX_SERIALIZATION_RETRIES; attempt++) {
     try {
       const result = await runBookingTransaction(params);
-      void sendBookingConfirmationEmail(result);
+      void sendBookingRequestedEmail(result);
       return result.booking;
     } catch (err) {
       lastError = err;
@@ -69,14 +76,14 @@ async function runBookingTransaction({ parentId, childId, sessionId }: CreateBoo
       const existing = await tx.booking.findUnique({
         where: { childId_sessionId: { childId, sessionId } },
       });
-      if (existing && existing.status === "CONFIRMED") {
-        throw new AppError("This child is already booked into this class", 409);
+      if (existing && (HOLDING_STATUSES as readonly string[]).includes(existing.status)) {
+        throw new AppError("This child already has a booking request for this class", 409);
       }
 
-      const confirmedCount = await tx.booking.count({
-        where: { sessionId, status: "CONFIRMED" },
+      const holdingCount = await tx.booking.count({
+        where: { sessionId, status: { in: [...HOLDING_STATUSES] } },
       });
-      if (confirmedCount >= session.capacity) {
+      if (holdingCount >= session.capacity) {
         throw new AppError("This class is full", 409);
       }
 
@@ -93,10 +100,10 @@ async function runBookingTransaction({ parentId, childId, sessionId }: CreateBoo
       const booking = existing
         ? await tx.booking.update({
             where: { id: existing.id },
-            data: { status: "CONFIRMED", creditsSpent: cost },
+            data: { status: "PENDING_APPROVAL", creditsSpent: cost },
           })
         : await tx.booking.create({
-            data: { childId, sessionId, parentId, creditsSpent: cost },
+            data: { childId, sessionId, parentId, status: "PENDING_APPROVAL", creditsSpent: cost },
           });
 
       await tx.creditTransaction.create({
@@ -123,8 +130,8 @@ export async function cancelBooking({ bookingId, parentId }: CancelBookingParams
     if (!booking || booking.parentId !== parentId) {
       throw new AppError("Booking not found", 404);
     }
-    if (booking.status !== "CONFIRMED") {
-      throw new AppError("Only confirmed bookings can be cancelled", 400);
+    if (!(HOLDING_STATUSES as readonly string[]).includes(booking.status)) {
+      throw new AppError("Only pending or confirmed bookings can be cancelled", 400);
     }
     if (booking.session.startsAt <= new Date()) {
       throw new AppError("This class has already started", 400);
@@ -148,7 +155,65 @@ export async function cancelBooking({ bookingId, parentId }: CancelBookingParams
   });
 }
 
-async function sendBookingConfirmationEmail(result: Awaited<ReturnType<typeof runBookingTransaction>>) {
+interface ProviderBookingActionParams {
+  bookingId: string;
+  providerId: string;
+  role: string;
+}
+
+async function loadPendingBookingForProvider(bookingId: string, providerId: string, role: string) {
+  const booking = await prisma.booking.findUnique({
+    where: { id: bookingId },
+    include: { session: { include: { activity: true } }, child: true },
+  });
+  if (!booking) {
+    throw new AppError("Booking not found", 404);
+  }
+  if (role !== "ADMIN" && booking.session.activity.providerId !== providerId) {
+    throw new AppError("You do not have permission to act on this booking", 403);
+  }
+  if (booking.status !== "PENDING_APPROVAL") {
+    throw new AppError("Only pending bookings can be approved or rejected", 400);
+  }
+  return booking;
+}
+
+export async function approveBooking({ bookingId, providerId, role }: ProviderBookingActionParams) {
+  const booking = await loadPendingBookingForProvider(bookingId, providerId, role);
+
+  const updated = await prisma.booking.update({
+    where: { id: booking.id },
+    data: { status: "CONFIRMED" },
+  });
+
+  void sendBookingDecisionEmail(booking, "approved");
+  return updated;
+}
+
+export async function rejectBooking({ bookingId, providerId, role }: ProviderBookingActionParams) {
+  const booking = await loadPendingBookingForProvider(bookingId, providerId, role);
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const rejected = await tx.booking.update({
+      where: { id: booking.id },
+      data: { status: "REJECTED" },
+    });
+    await tx.creditTransaction.create({
+      data: {
+        userId: booking.parentId,
+        bookingId: booking.id,
+        amount: booking.creditsSpent,
+        reason: "BOOKING_REFUND",
+      },
+    });
+    return rejected;
+  });
+
+  void sendBookingDecisionEmail(booking, "rejected");
+  return updated;
+}
+
+async function sendBookingRequestedEmail(result: Awaited<ReturnType<typeof runBookingTransaction>>) {
   try {
     const [parent, activity] = await Promise.all([
       prisma.user.findUniqueOrThrow({ where: { id: result.booking.parentId } }),
@@ -157,11 +222,34 @@ async function sendBookingConfirmationEmail(result: Awaited<ReturnType<typeof ru
 
     await sendEmail({
       to: parent.email,
-      subject: `Booking confirmed: ${activity.title}`,
-      text: `${result.child.firstName} is booked into ${activity.title} on ${result.session.startsAt.toLocaleString()}. ${result.booking.creditsSpent} credits were used.`,
+      subject: `Booking requested: ${activity.title}`,
+      text: `${result.child.firstName}'s booking request for ${activity.title} on ${result.session.startsAt.toLocaleString()} has been sent to the provider for approval. ${result.booking.creditsSpent} credits were held.`,
     });
   } catch (err) {
     // A failed notification shouldn't undo a successful, already-committed booking.
-    console.error("Failed to send booking confirmation email", err);
+    console.error("Failed to send booking requested email", err);
+  }
+}
+
+async function sendBookingDecisionEmail(
+  booking: Prisma.BookingGetPayload<{ include: { session: { include: { activity: true } }; child: true } }>,
+  decision: "approved" | "rejected",
+) {
+  try {
+    const parent = await prisma.user.findUniqueOrThrow({ where: { id: booking.parentId } });
+    const activity = booking.session.activity;
+
+    const text =
+      decision === "approved"
+        ? `${booking.child.firstName}'s booking for ${activity.title} on ${booking.session.startsAt.toLocaleString()} has been confirmed.`
+        : `${booking.child.firstName}'s booking request for ${activity.title} on ${booking.session.startsAt.toLocaleString()} was declined. ${booking.creditsSpent} credits have been refunded.`;
+
+    await sendEmail({
+      to: parent.email,
+      subject: `Booking ${decision}: ${activity.title}`,
+      text,
+    });
+  } catch (err) {
+    console.error(`Failed to send booking ${decision} email`, err);
   }
 }
