@@ -34,6 +34,8 @@ model User {
   activities         Activity[]
   subscription       Subscription?
   creditTransactions CreditTransaction[]
+  children           Child[]
+  bookings           Booking[]
 }
 
 model AgeGroup {
@@ -107,8 +109,55 @@ model ClassSession {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  bookings Booking[]
+
   @@unique([recurringScheduleId, startsAt])
   @@index([activityId, startsAt])
+}
+
+model Child {
+  id          String   @id @default(uuid())
+  parentId    String
+  parent      User     @relation(fields: [parentId], references: [id])
+  firstName   String
+  lastName    String
+  dateOfBirth DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  bookings Booking[]
+
+  @@index([parentId])
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  ATTENDED
+  NO_SHOW
+}
+
+// A booking transactionally pairs a capacity check (session.capacity vs. CONFIRMED bookings)
+// with a credit deduction (a CreditTransaction insert) — see src/services/booking.ts for the
+// concurrency-safe transaction that creates these together.
+model Booking {
+  id           String        @id @default(uuid())
+  childId      String
+  child        Child         @relation(fields: [childId], references: [id])
+  sessionId    String
+  session      ClassSession  @relation(fields: [sessionId], references: [id])
+  parentId     String
+  parent       User          @relation(fields: [parentId], references: [id])
+  status       BookingStatus @default(CONFIRMED)
+  creditsSpent Int
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  creditTransactions CreditTransaction[]
+
+  @@unique([childId, sessionId])
+  @@index([sessionId])
+  @@index([parentId])
 }
 
 model Plan {
@@ -170,6 +219,8 @@ model CreditTransaction {
   user           User                     @relation(fields: [userId], references: [id])
   subscriptionId String?
   subscription   Subscription?            @relation(fields: [subscriptionId], references: [id])
+  bookingId      String?
+  booking        Booking?                 @relation(fields: [bookingId], references: [id])
   amount         Int
   reason         CreditTransactionReason
   createdAt      DateTime                 @default(now())

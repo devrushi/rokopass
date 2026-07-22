@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { apiRequest, ApiError } from "../../lib/apiClient";
 import type { Activity, ClassSession } from "../../lib/types";
 import "./provider.css";
@@ -225,6 +225,9 @@ export function ActivityDetail() {
                     })}
                   </span>
                   <div className="session-row__actions">
+                    <Link to={`/provider/sessions/${session.id}/roster`} className="button button--secondary">
+                      Roster
+                    </Link>
                     <button
                       type="button"
                       className="button button--secondary"

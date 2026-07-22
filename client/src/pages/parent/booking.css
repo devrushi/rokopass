@@ -1,0 +1,10 @@
+.booking-confirmation {
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+}
+
+.booking-confirmation h2 {
+  margin-top: 0;
+}

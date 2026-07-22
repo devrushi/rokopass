@@ -35,6 +35,19 @@ export function Layout() {
               <Link to="/plans" onClick={() => setNavOpen(false)}>
                 Plans
               </Link>
+              {(user.role === "PARENT" || user.role === "ADMIN") && (
+                <>
+                  <Link to="/browse" onClick={() => setNavOpen(false)}>
+                    Browse Activities
+                  </Link>
+                  <Link to="/children" onClick={() => setNavOpen(false)}>
+                    My Children
+                  </Link>
+                  <Link to="/bookings" onClick={() => setNavOpen(false)}>
+                    My Bookings
+                  </Link>
+                </>
+              )}
               {(user.role === "PROVIDER" || user.role === "ADMIN") && (
                 <Link to="/provider/activities" onClick={() => setNavOpen(false)}>
                   My Activities

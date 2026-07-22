@@ -36,3 +36,36 @@ sessionsRouter.patch("/:id", requireAuth, requireRole("PROVIDER", "ADMIN"), asyn
     next(err);
   }
 });
+
+sessionsRouter.get(
+  "/:id/attendees",
+  requireAuth,
+  requireRole("PROVIDER", "ADMIN"),
+  async (req, res, next) => {
+    try {
+      const session = await prisma.classSession.findUnique({
+        where: { id: param(req.params.id) },
+        include: { activity: { select: { providerId: true } } },
+      });
+      if (!session) {
+        throw new AppError("Session not found", 404);
+      }
+      if (req.user!.role !== "ADMIN" && session.activity.providerId !== req.user!.sub) {
+        throw new AppError("You do not have permission to view this roster", 403);
+      }
+
+      const bookings = await prisma.booking.findMany({
+        where: { sessionId: session.id, status: { in: ["CONFIRMED", "ATTENDED", "NO_SHOW"] } },
+        include: {
+          child: { select: { id: true, firstName: true, lastName: true } },
+          parent: { select: { id: true, firstName: true, lastName: true, email: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      res.json({ bookings });
+    } catch (err) {
+      next(err);
+    }
+  },
+);

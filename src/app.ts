@@ -8,6 +8,8 @@ import { activitiesRouter } from "./routes/activities";
 import { ageGroupsRouter } from "./routes/ageGroups";
 import { authRouter } from "./routes/auth";
 import { billingRouter } from "./routes/billing";
+import { bookingsRouter } from "./routes/bookings";
+import { childrenRouter } from "./routes/children";
 import { healthRouter } from "./routes/health";
 import { sessionsRouter } from "./routes/sessions";
 import { webhooksRouter } from "./routes/webhooks";
@@ -33,6 +35,8 @@ export function createApp() {
   app.use("/sessions", sessionsRouter);
   app.use("/age-groups", ageGroupsRouter);
   app.use("/billing", billingRouter);
+  app.use("/children", childrenRouter);
+  app.use("/bookings", bookingsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

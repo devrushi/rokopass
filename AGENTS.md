@@ -408,3 +408,71 @@ before touching this code:**
 - Verified: 59 backend tests green (`npm test` — 12 new tests across
   `creditBalance.test.ts`, `webhooks.test.ts`, `billing.test.ts`, all
   using mocked Stripe calls), both root and client builds clean.
+
+### 2026-07-22 — Step 5: Class Booking and Attendance Roster
+
+**Built:**
+- `Child` model (parent-owned) and `Booking` model
+  (`CONFIRMED`/`CANCELLED`/`ATTENDED`/`NO_SHOW`), since bookings need both
+  a child and a per-session capacity/credit check that didn't exist before
+  — another retroactive gap-fill like Step 3's provider role.
+- `src/services/booking.ts` — `createBooking()` runs the capacity check,
+  credit-balance check, booking insert, and credit deduction (a
+  `CreditTransaction` with `reason: "BOOKING"`) inside one
+  **`Prisma.TransactionIsolationLevel.Serializable`** transaction, retried
+  up to 3 times on Postgres write-conflict (`P2034`) before returning 409.
+  This is the "concurrency checks" ask — verified with a real test that
+  fires two simultaneous booking requests at a capacity-1 session and
+  asserts exactly one wins (`tests/bookings.test.ts`), not mocked.
+  `cancelBooking()` refunds via a `BOOKING_REFUND` transaction, closing the
+  loop flagged in Step 4.
+- `src/lib/email.ts` — a `sendEmail()` seam with a console-log transport
+  (no real provider configured); `createBooking` calls it after the
+  transaction commits, not inside it, so a notification failure can't roll
+  back a paid-for booking.
+- `GET /sessions/:id/attendees` (provider, ownership-checked) and
+  `PATCH /bookings/:id/status` (provider marks `ATTENDED`/`NO_SHOW`).
+- Frontend: `Children` (add/list), `Browse` + `ActivityBrowseDetail`
+  (parent-facing activity list, session list, child picker, Book button,
+  inline confirmation), `MyBookings` (list + cancel), and `Roster`
+  (provider view of a session's bookings with attendance buttons). Nav
+  gained Browse/My Children/My Bookings for parents.
+
+**Conventions/decisions for future steps:**
+- SERIALIZABLE + bounded retry is now the established pattern for
+  "check-then-write under contention" — reuse it (don't invent a new
+  locking strategy) for anything else with the same shape.
+- `POST /bookings` returns the booking **with `child`/`session.activity`
+  included**, not the bare row `createBooking()` returns internally — the
+  route re-fetches with includes before responding, specifically so the
+  frontend confirmation UI doesn't need a second round-trip. If you add
+  another booking-adjacent endpoint, follow that shape rather than
+  returning the raw transaction result.
+
+**Flag for whoever picks this up next:**
+- No real email provider — `sendEmail()` just logs. Fine for now; swap
+  the implementation in `src/lib/email.ts` when one's chosen, every caller
+  already goes through that one function.
+- Step 3's flag still applies and now matters more: `ClassSession` rows
+  are only materialized 56 days ahead **at schedule-creation time**, with
+  nothing extending that window as time passes. A long-lived recurring
+  schedule will eventually run out of bookable sessions with no automatic
+  refresh — needs a scheduled job.
+- No admin-facing view across all providers' bookings/rosters — that's
+  the Final Step's territory (admin dashboard, moderation).
+- Debugging note, not a product gap: while browser-verifying this step, a
+  Playwright script simulating two users (provider + parent) in the same
+  browser context produced confusing 403s — two pages in one context
+  **share `localStorage`**, so the second login's tokens clobbered the
+  first's. Fixed by using two separate `browser.newContext()` calls. Not
+  an app bug, but worth knowing if you script multi-user browser
+  verification again.
+- Verified: 71 backend tests green (12 new in `tests/bookings.test.ts`,
+  including the real-concurrency test), both builds clean, and the full
+  flow — provider creates activity/schedule → parent registers, adds a
+  child, gets test credits, browses, books, sees confirmation → provider
+  views the roster and marks attendance → parent sees the updated status
+  — was driven in a real browser across two isolated sessions with zero
+  console errors (aside from an expected 401→refresh→200 sequence when an
+  access token genuinely expired mid-test, which self-recovered exactly
+  as designed).

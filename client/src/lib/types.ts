@@ -45,3 +45,33 @@ export interface CreditSummary {
   subscriptionStatus: string | null;
   currentPeriodEnd: string | null;
 }
+
+export interface Child {
+  id: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+}
+
+export type BookingStatus = "CONFIRMED" | "CANCELLED" | "ATTENDED" | "NO_SHOW";
+
+export interface Booking {
+  id: string;
+  status: BookingStatus;
+  creditsSpent: number;
+  createdAt: string;
+  child: { id: string; firstName: string; lastName: string };
+  session: {
+    id: string;
+    startsAt: string;
+    endsAt: string;
+    activity: { id: string; title: string; location: string };
+  };
+}
+
+export interface AttendeeBooking {
+  id: string;
+  status: BookingStatus;
+  child: { id: string; firstName: string; lastName: string };
+  parent: { id: string; firstName: string; lastName: string; email: string };
+}
