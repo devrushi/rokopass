@@ -11,6 +11,7 @@ export function Register() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"PARENT" | "PROVIDER">("PARENT");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -19,7 +20,7 @@ export function Register() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await register({ email, password, firstName, lastName });
+      await register({ email, password, firstName, lastName, role });
       navigate("/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong. Please try again.");
@@ -63,6 +64,14 @@ export function Register() {
           minLength={8}
           required
         />
+      </label>
+
+      <label>
+        I am registering as a
+        <select value={role} onChange={(e) => setRole(e.target.value as "PARENT" | "PROVIDER")}>
+          <option value="PARENT">Parent looking for activities</option>
+          <option value="PROVIDER">Activity provider</option>
+        </select>
       </label>
 
       {error && <p className="auth-form__error">{error}</p>}

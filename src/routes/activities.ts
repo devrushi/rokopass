@@ -1,0 +1,168 @@
+import { Router } from "express";
+import { param } from "../lib/requestParams";
+import { prisma } from "../lib/prisma";
+import { AppError } from "../middleware/errorHandler";
+import { requireAuth } from "../middleware/requireAuth";
+import { requireRole } from "../middleware/requireRole";
+import {
+  createActivitySchema,
+  createScheduleSchema,
+  updateActivitySchema,
+} from "../schemas/activity";
+import { syncSessionsForSchedule } from "../services/scheduleGenerator";
+
+export const activitiesRouter = Router();
+
+async function loadOwnedActivity(activityId: string, userId: string, role: string) {
+  const activity = await prisma.activity.findUnique({ where: { id: activityId } });
+  if (!activity) {
+    throw new AppError("Activity not found", 404);
+  }
+  if (role !== "ADMIN" && activity.providerId !== userId) {
+    throw new AppError("You do not have permission to modify this activity", 403);
+  }
+  return activity;
+}
+
+activitiesRouter.get("/", async (req, res, next) => {
+  try {
+    const activities = await prisma.activity.findMany({
+      where: { isActive: true },
+      include: {
+        ageGroup: true,
+        provider: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ activities });
+  } catch (err) {
+    next(err);
+  }
+});
+
+activitiesRouter.get("/mine", requireAuth, requireRole("PROVIDER", "ADMIN"), async (req, res, next) => {
+  try {
+    const activities = await prisma.activity.findMany({
+      where: { providerId: req.user!.sub },
+      include: { ageGroup: true },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ activities });
+  } catch (err) {
+    next(err);
+  }
+});
+
+activitiesRouter.get("/:id", async (req, res, next) => {
+  try {
+    const activity = await prisma.activity.findUnique({
+      where: { id: param(req.params.id) },
+      include: { ageGroup: true },
+    });
+    if (!activity) {
+      throw new AppError("Activity not found", 404);
+    }
+    res.json({ activity });
+  } catch (err) {
+    next(err);
+  }
+});
+
+activitiesRouter.post("/", requireAuth, requireRole("PROVIDER", "ADMIN"), async (req, res, next) => {
+  try {
+    const parsed = createActivitySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(parsed.error.issues[0]?.message ?? "Invalid activity data", 400);
+    }
+
+    const ageGroup = await prisma.ageGroup.findUnique({ where: { id: parsed.data.ageGroupId } });
+    if (!ageGroup) {
+      throw new AppError("Unknown age group", 400);
+    }
+
+    const activity = await prisma.activity.create({
+      data: { ...parsed.data, providerId: req.user!.sub },
+      include: { ageGroup: true },
+    });
+
+    res.status(201).json({ activity });
+  } catch (err) {
+    next(err);
+  }
+});
+
+activitiesRouter.patch("/:id", requireAuth, requireRole("PROVIDER", "ADMIN"), async (req, res, next) => {
+  try {
+    const activity = await loadOwnedActivity(param(req.params.id), req.user!.sub, req.user!.role);
+
+    const parsed = updateActivitySchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(parsed.error.issues[0]?.message ?? "Invalid activity data", 400);
+    }
+
+    if (parsed.data.ageGroupId) {
+      const ageGroup = await prisma.ageGroup.findUnique({ where: { id: parsed.data.ageGroupId } });
+      if (!ageGroup) {
+        throw new AppError("Unknown age group", 400);
+      }
+    }
+
+    const updated = await prisma.activity.update({
+      where: { id: activity.id },
+      data: parsed.data,
+      include: { ageGroup: true },
+    });
+
+    res.json({ activity: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+activitiesRouter.post(
+  "/:id/schedules",
+  requireAuth,
+  requireRole("PROVIDER", "ADMIN"),
+  async (req, res, next) => {
+    try {
+      const activity = await loadOwnedActivity(param(req.params.id), req.user!.sub, req.user!.role);
+
+      const parsed = createScheduleSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(parsed.error.issues[0]?.message ?? "Invalid schedule data", 400);
+      }
+
+      const schedule = await prisma.recurringSchedule.create({
+        data: { ...parsed.data, activityId: activity.id },
+      });
+
+      await syncSessionsForSchedule(schedule.id);
+
+      res.status(201).json({ schedule });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+activitiesRouter.get("/:id/sessions", async (req, res, next) => {
+  try {
+    const from = req.query.from ? new Date(String(req.query.from)) : new Date();
+    const to = req.query.to
+      ? new Date(String(req.query.to))
+      : new Date(from.getTime() + 28 * 24 * 60 * 60_000);
+
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) {
+      throw new AppError("Invalid from/to date", 400);
+    }
+
+    const sessions = await prisma.classSession.findMany({
+      where: { activityId: param(req.params.id), startsAt: { gte: from, lte: to } },
+      orderBy: { startsAt: "asc" },
+    });
+
+    res.json({ sessions });
+  } catch (err) {
+    next(err);
+  }
+});

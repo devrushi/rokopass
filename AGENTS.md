@@ -168,3 +168,119 @@ entries short (a few bullets) — don't let it grow unbounded.
 - Verified end-to-end: full backend suite is 24 tests green (`npm test`),
   both `npm run build` (root) and `client`'s build are clean, and the
   browser flow above passed with screenshots reviewed.
+
+### 2026-07-22 — Step 3: Activity Management and Schedule Planning
+
+**Built:**
+- **Retroactively completed provider onboarding**, which Step 2 skipped:
+  added `PROVIDER` to `UserRole` and a `verificationStatus`
+  (`PENDING`/`APPROVED`/`REJECTED`, nullable — only meaningful for
+  providers) field on `User`. `POST /auth/register` now accepts an
+  optional `role` (`PARENT` default, or `PROVIDER` — never `ADMIN` via
+  public registration), and sets `verificationStatus: PENDING` for new
+  providers. This wasn't in this step's ask, but activities need an owner
+  and the plan's Final Step assumes provider onboarding already exists —
+  see the flag below.
+- `AgeGroup` model, seeded via `prisma/seed.ts` (Toddlers/Preschool/
+  Junior/Middle/Teen bands) — `prisma db seed` runs automatically after
+  `npm run prisma:migrate`, and is a separate step in CI
+  (`.github/workflows/test.yml`) since `migrate deploy` doesn't seed.
+- `Activity` model (title, description, category as free-text — not an
+  enum, since providers will keep inventing categories — location,
+  capacity, creditCost, isActive, owned by a provider, references an
+  `AgeGroup`). CRUD at `/activities`: public `GET /`, `GET /:id`; provider-
+  only `POST /`, `PATCH /:id` (ownership-checked — a provider can only
+  edit their own activities; `ADMIN` bypasses, for the Final Step); `GET
+  /mine` for a provider's own list.
+- `RecurringSchedule` (day-of-week + HH:mm start time + duration +
+  WEEKLY/BIWEEKLY frequency + start/end date) and `ClassSession` (the
+  materialized concrete occurrences) models, plus
+  `src/services/scheduleGenerator.ts` — `generateOccurrences()` is a pure
+  function (unit tested directly, `tests/scheduleGenerator.test.ts`) that
+  turns a pattern into concrete start/end instants; `syncSessionsForSchedule()`
+  wraps it in an upsert loop keyed on `(recurringScheduleId, startsAt)`.
+  Sessions are materialized **56 days ahead** at creation time only — see
+  flag below.
+- API: `POST /activities/:id/schedules` (provider, generates sessions
+  immediately), `GET /activities/:id/sessions?from=&to=` (public),
+  `PATCH /sessions/:id` (provider, ownership-checked — edit time or toggle
+  `isCancelled`).
+- `requireRole(...roles)` middleware (`src/middleware/requireRole.ts`),
+  reused alongside `requireAuth`.
+- Frontend: `client/src/pages/provider/` — `ActivitiesList`, `ActivityForm`
+  (create), `ActivityDetail` (activity info + "add a recurring schedule"
+  form + a **weekly calendar grid** of sessions with Cancel/Restore per
+  session, prev/next week navigation). `Register` now has a role picker
+  (Parent/Provider) — needed so a provider account is reachable from the
+  browser at all. Nav shows "My Activities" for `PROVIDER`/`ADMIN`.
+  `ProtectedRoute` gained an optional `roles` prop for route-level
+  authorization.
+
+**Two real bugs caught during manual verification (both fixed, both now
+covered by tests) — worth knowing about if you touch this code:**
+- **Schedule generator silently dropped "today."** The window-start
+  comparison used `pattern.startDate` and a bare-midnight cursor, so a
+  class scheduled for later *today* was excluded because midnight-today is
+  always earlier than the current moment. Fixed by comparing the actual
+  `startsAt` instant (with the pattern's time-of-day applied) against
+  `windowStart`/`windowEnd`, not a day-granularity cursor. Regression
+  tests added in `tests/scheduleGenerator.test.ts`.
+- **Calendar UI grouped sessions by the wrong day in UTC+ timezones.**
+  `formatDayKey()` used `date.toISOString().slice(0, 10)` (UTC) while the
+  visible day labels used `toLocaleDateString()` (local) — in BST
+  (UTC+1), local midnight falls on the *previous* UTC calendar day, so
+  every session rendered one column early. Fixed by deriving the key from
+  local `getFullYear()`/`getMonth()`/`getDate()` instead. Caught only by
+  actually driving the browser (curl/API tests looked fine since they
+  don't render anything) — reinforces why the browser-verification step
+  matters for anything date-rendering-related.
+
+**Conventions/decisions for future steps:**
+- **Sessions are materialized once, on schedule creation, for a 56-day
+  rolling window — there's no recurring job extending that window.** A
+  schedule created today has sessions through mid-September; nothing
+  currently regenerates further out as time passes. Step 5 (booking) and
+  beyond will need either a scheduled job (cron/worker) calling
+  `syncSessionsForSchedule` per active schedule, or a lazy
+  "extend-on-read" trigger. Not built yet — flagged, not solved.
+- `syncSessionsForSchedule` **never overwrites an existing session** (`upsert`
+  with `update: {}`) — a provider's manual edit or cancellation survives
+  re-running the generator. Editing a `RecurringSchedule`'s pattern
+  currently does *not* retroactively change already-materialized sessions;
+  there's no `PATCH /schedules/:id` yet.
+- Express 5's route-param types are `string | string[]` (path-to-regexp
+  supports repeating params like `/:id+`, even though none of our routes
+  use that). Added `src/lib/requestParams.ts`'s `param()` helper to narrow
+  `req.params.x` to `string` everywhere rather than casting ad hoc — use it
+  for any new route handler.
+- Test files that create rows with foreign keys to each other **must use
+  distinct email suffixes**, not a shared generic
+  `@test.rokidspass.local`. Learned this the hard way:
+  `auth.register.test.ts` and `activities.test.ts` both used the same
+  suffix, and their `afterAll` cleanups raced — one tried deleting `User`
+  rows the other's `Activity` rows still referenced, throwing a foreign
+  key violation. Now `@register.test.rokidspass.local` and
+  `@activities.test.rokidspass.local` respectively. Any new test file that
+  creates related rows should follow the same pattern.
+
+**Flag for whoever picks this up next:**
+- The provider `verificationStatus` field does **nothing** yet — a
+  `PENDING` provider can create activities and schedules exactly like an
+  `APPROVED` one. The Final Step's admin approve/reject workflow needs to
+  either gate activity creation on `APPROVED`, or gate activity
+  *visibility* in public listings instead (probably the friendlier UX —
+  providers can build their catalog while awaiting approval). Worth
+  deciding explicitly rather than defaulting to whichever is easier.
+- Category on `Activity` is a free-text field, not an enum/lookup table —
+  fine for now, but search/filter (Final Step) will want to know the
+  actual set of values in use before building a filter UI.
+- No timezone handling — `startTime` is a plain `HH:mm` string interpreted
+  in whatever timezone the Node process runs in. Fine while everything's
+  Leicester-only and running in one region; would need real handling
+  before supporting multiple venue timezones.
+- Verified end-to-end: 43 backend tests green (`npm test`, including 4
+  schedule-generator unit tests and 2 regression tests for the bugs
+  above), both root and client builds clean, and the full provider flow
+  (register as provider → create activity → add recurring schedule → see
+  it on the calendar → cancel it) was driven in a real browser with
+  screenshots reviewed and zero console errors.

@@ -9,16 +9,101 @@ datasource db {
 
 enum UserRole {
   PARENT
+  PROVIDER
   ADMIN
 }
 
+enum ProviderVerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  firstName    String
-  lastName     String
-  role         UserRole @default(PARENT)
+  id                 String                       @id @default(uuid())
+  email              String                       @unique
+  passwordHash       String
+  firstName          String
+  lastName           String
+  role               UserRole                     @default(PARENT)
+  verificationStatus ProviderVerificationStatus?
+  createdAt          DateTime                     @default(now())
+  updatedAt          DateTime                     @updatedAt
+
+  activities Activity[]
+}
+
+model AgeGroup {
+  id        String   @id @default(uuid())
+  label     String   @unique
+  minAge    Int
+  maxAge    Int
+  createdAt DateTime @default(now())
+
+  activities Activity[]
+}
+
+model Activity {
+  id         String   @id @default(uuid())
+  providerId String
+  provider   User     @relation(fields: [providerId], references: [id])
+  ageGroupId String
+  ageGroup   AgeGroup @relation(fields: [ageGroupId], references: [id])
+
+  title       String
+  description String
+  category    String
+  location    String
+  capacity    Int
+  creditCost  Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recurringSchedules RecurringSchedule[]
+  sessions           ClassSession[]
+
+  @@index([providerId])
+  @@index([ageGroupId])
+}
+
+enum RecurrenceFrequency {
+  WEEKLY
+  BIWEEKLY
+}
+
+model RecurringSchedule {
+  id              String              @id @default(uuid())
+  activityId      String
+  activity        Activity            @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  dayOfWeek       Int
+  startTime       String
+  durationMinutes Int
+  frequency       RecurrenceFrequency @default(WEEKLY)
+  startDate       DateTime
+  endDate         DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  sessions ClassSession[]
+
+  @@index([activityId])
+}
+
+model ClassSession {
+  id                  String             @id @default(uuid())
+  activityId          String
+  activity            Activity           @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  recurringScheduleId String?
+  recurringSchedule   RecurringSchedule? @relation(fields: [recurringScheduleId], references: [id], onDelete: SetNull)
+
+  startsAt     DateTime
+  endsAt       DateTime
+  capacity     Int
+  isCancelled  Boolean  @default(false)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  @@unique([recurringScheduleId, startsAt])
+  @@index([activityId, startsAt])
 }

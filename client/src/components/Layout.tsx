@@ -32,6 +32,11 @@ export function Layout() {
               <Link to="/dashboard" onClick={() => setNavOpen(false)}>
                 Dashboard
               </Link>
+              {(user.role === "PROVIDER" || user.role === "ADMIN") && (
+                <Link to="/provider/activities" onClick={() => setNavOpen(false)}>
+                  My Activities
+                </Link>
+              )}
               <button
                 type="button"
                 className="layout__logout"

@@ -22,7 +22,7 @@ authRouter.post("/register", async (req, res, next) => {
     if (!parsed.success) {
       throw new AppError(parsed.error.issues[0]?.message ?? "Invalid registration data", 400);
     }
-    const { email, password, firstName, lastName } = parsed.data;
+    const { email, password, firstName, lastName, role } = parsed.data;
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
@@ -31,7 +31,14 @@ authRouter.post("/register", async (req, res, next) => {
 
     const passwordHash = await hashPassword(password);
     const user = await prisma.user.create({
-      data: { email, passwordHash, firstName, lastName },
+      data: {
+        email,
+        passwordHash,
+        firstName,
+        lastName,
+        role,
+        verificationStatus: role === "PROVIDER" ? "PENDING" : null,
+      },
     });
 
     res.status(201).json({ user: serializeUser(user), ...issueTokens(user) });

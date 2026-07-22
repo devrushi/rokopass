@@ -45,6 +45,8 @@ jobs:
 
       - run: npx prisma migrate deploy
 
+      - run: npx prisma db seed
+
       - run: npm run build
 
       - run: npm test

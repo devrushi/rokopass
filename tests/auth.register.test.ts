@@ -5,7 +5,10 @@ import { prisma } from "../src/lib/prisma";
 
 const app = createApp();
 
-const EMAIL_SUFFIX = "@test.rokidspass.local";
+// Scoped to this file so its afterAll cleanup can never race with another test file's rows
+// (e.g. activities.test.ts creates Activities owned by provider users, which would violate the
+// Activity->User foreign key if this file tried to delete those same users first).
+const EMAIL_SUFFIX = "@register.test.rokidspass.local";
 const uniqueEmail = () => `register-${Date.now()}-${Math.random().toString(36).slice(2)}${EMAIL_SUFFIX}`;
 
 const validPayload = () => ({
