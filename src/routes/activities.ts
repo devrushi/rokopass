@@ -27,12 +27,20 @@ async function loadOwnedActivity(activityId: string, userId: string, role: strin
 activitiesRouter.get("/", async (req, res, next) => {
   try {
     const activities = await prisma.activity.findMany({
-      where: { isActive: true },
+      where: {
+        isActive: true,
+        isFlagged: false,
+        // Public listing only shows activities from verified providers (or admin-created ones,
+        // which have no verificationStatus to check). Providers still see their own pending
+        // activities via GET /activities/mine while awaiting approval — this only hides them
+        // from other visitors, it doesn't block creation/management.
+        provider: { OR: [{ role: "ADMIN" }, { verificationStatus: "APPROVED" }] },
+      },
       include: {
         ageGroup: true,
         provider: { select: { id: true, firstName: true, lastName: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
     });
     res.json({ activities });
   } catch (err) {

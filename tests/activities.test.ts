@@ -41,6 +41,15 @@ beforeAll(async () => {
 
   const ageGroup = await prisma.ageGroup.findFirstOrThrow();
   ageGroupId = ageGroup.id;
+
+  // The public listing (GET /activities) only shows activities from APPROVED providers as of
+  // the Final Step's moderation gating — approve both test providers so the pre-existing tests
+  // in this file keep testing what they intended. See admin.test.ts for coverage of the
+  // PENDING-provider-hidden behavior itself.
+  await prisma.user.updateMany({
+    where: { id: { in: [provider.id, otherProvider.id] } },
+    data: { verificationStatus: "APPROVED" },
+  });
 });
 
 afterAll(async () => {

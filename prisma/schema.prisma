@@ -36,6 +36,7 @@ model User {
   creditTransactions CreditTransaction[]
   children           Child[]
   bookings           Booking[]
+  auditLogs          AuditLog[]
 }
 
 model AgeGroup {
@@ -62,6 +63,8 @@ model Activity {
   capacity    Int
   creditCost  Int
   isActive    Boolean  @default(true)
+  isFlagged   Boolean  @default(false)
+  isFeatured  Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -235,4 +238,29 @@ model StripeEvent {
   id          String   @id
   type        String
   processedAt DateTime @default(now())
+}
+
+enum AuditAction {
+  PROVIDER_APPROVED
+  PROVIDER_REJECTED
+  ACTIVITY_FLAGGED
+  ACTIVITY_UNFLAGGED
+  ACTIVITY_FEATURED
+  ACTIVITY_UNFEATURED
+}
+
+// Every admin moderation action writes one row here — the "audit logs" the approve/reject and
+// flag/feature endpoints are required to keep. Read via GET /admin/audit-log.
+model AuditLog {
+  id         String      @id @default(uuid())
+  adminId    String
+  admin      User        @relation(fields: [adminId], references: [id])
+  action     AuditAction
+  targetType String
+  targetId   String
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  @@index([targetType, targetId])
+  @@index([adminId])
 }

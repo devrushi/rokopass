@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { env } from "./config/env";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { activitiesRouter } from "./routes/activities";
+import { adminRouter } from "./routes/admin";
 import { ageGroupsRouter } from "./routes/ageGroups";
 import { authRouter } from "./routes/auth";
 import { billingRouter } from "./routes/billing";
@@ -37,6 +38,7 @@ export function createApp() {
   app.use("/billing", billingRouter);
   app.use("/children", childrenRouter);
   app.use("/bookings", bookingsRouter);
+  app.use("/admin", adminRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

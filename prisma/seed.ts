@@ -1,7 +1,14 @@
 import { PrismaClient } from "@prisma/client";
+import { hashPassword } from "../src/lib/password";
 import { stripe } from "../src/lib/stripe";
 
 const prisma = new PrismaClient();
+
+// Dev-only bootstrap credential — there is no public way to create an ADMIN account (by
+// design, registration only allows PARENT/PROVIDER). Change this password before using these
+// credentials anywhere but a local/throwaway environment.
+const ADMIN_EMAIL = "admin@rokidspass.local";
+const ADMIN_PASSWORD = "AdminPassword123";
 
 const AGE_GROUPS = [
   { label: "Toddlers (1-2)", minAge: 1, maxAge: 2 },
@@ -107,8 +114,28 @@ async function seedPlans() {
   }
 }
 
+async function seedAdmin() {
+  const passwordHash = await hashPassword(ADMIN_PASSWORD);
+  await prisma.user.upsert({
+    where: { email: ADMIN_EMAIL },
+    update: {},
+    create: {
+      email: ADMIN_EMAIL,
+      passwordHash,
+      firstName: "Admin",
+      lastName: "User",
+      role: "ADMIN",
+    },
+  });
+  console.log(`Seeded admin user: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD} (dev only — do not use in production)`);
+}
+
 async function main() {
+  // Order matters: seedPlans() needs live Stripe credentials and is the one seed step that can
+  // fail in an environment without real keys configured — run it last so a Stripe failure
+  // doesn't prevent the (Stripe-independent) age groups and admin user from being seeded.
   await seedAgeGroups();
+  await seedAdmin();
   await seedPlans();
 }
 

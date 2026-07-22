@@ -2,10 +2,55 @@
 
 Architecture notes and decision history for RokidsPass — a ClassPass-style
 subscription platform for children's extracurricular activities in
-Leicester. Stack: Node + Express + TypeScript, Prisma ORM, PostgreSQL.
+Leicester. Stack: Node + Express + TypeScript, Prisma ORM, PostgreSQL,
+Stripe, React (Vite) frontend.
 
 This file is meant to be read start-to-finish as project history. Keep new
 entries short (a few bullets) — don't let it grow unbounded.
+
+## Project Status
+
+RokidsPass connects **parents** booking extracurricular classes for their
+children with **providers** who run those classes, with **admins**
+moderating both. The initial build (Steps 1–6, all in this file's log
+below) is complete end-to-end for that core loop:
+
+- **Auth & roles** — JWT access/refresh tokens, three roles (`PARENT`,
+  `PROVIDER`, `ADMIN`). Anyone can self-register as parent or provider;
+  there's no public path to `ADMIN` — one is seeded by `prisma/seed.ts`
+  (`admin@rokidspass.local`, dev-only credentials, see the Final Step
+  entry).
+- **Activities & scheduling** — providers create activities against a
+  seeded set of age groups, attach recurring weekly/biweekly schedules,
+  and a generator materializes concrete `ClassSession` rows on a rolling
+  56-day window (not auto-extended — see Step 3's flag).
+- **Subscriptions & credits** — Stripe Checkout (embedded) for monthly
+  plans; credit balance is an append-only ledger (`CreditTransaction`),
+  never a mutable counter, specifically so grants and deductions never
+  race each other.
+- **Booking & attendance** — booking a child into a session is one
+  `SERIALIZABLE` Postgres transaction (capacity check + credit deduction
+  together), retried on write-conflict; providers get a roster per session
+  and can mark attendance.
+- **Moderation** — providers start `PENDING` and are invisible in public
+  listings until an admin approves them (activity creation itself isn't
+  blocked, only public visibility); admins can flag (hide) or feature
+  (sort-to-top) any activity; every moderation action writes an
+  `AuditLog` row.
+
+**Explicitly not done** — flagged in detail in the relevant log entries,
+summarized here: no live Stripe verification was performed (all Stripe
+code is tested via SDK mocks only, see Step 4); no background job extends
+the 56-day session-generation window as time passes (Step 3); no real
+email provider, `sendEmail()` just logs (Step 5); no plan
+switching/cancellation UI (Step 4); no timezone handling beyond the
+server's local zone (Step 3).
+
+**Running it locally:** `npm run dev` (root) and `npm run dev` (in
+`client/`) for the two dev servers; `npm run prisma:migrate` to migrate +
+seed (age groups, subscription plans, the dev admin user); `npm test` for
+the backend suite. See `.env.example` / `client/.env.example` for required
+environment variables.
 
 ## Development Log
 
@@ -476,3 +521,90 @@ before touching this code:**
   console errors (aside from an expected 401→refresh→200 sequence when an
   access token genuinely expired mid-test, which self-recovered exactly
   as designed).
+
+### 2026-07-22 — Final Step: Admin Moderation and Verification Portal
+
+**Built:**
+- `AuditLog` model (`adminId`, `action` enum, `targetType`/`targetId`,
+  optional JSON `metadata`) — every moderation action below writes one row.
+  `Activity` gained `isFlagged`/`isFeatured` booleans.
+- `src/routes/admin.ts`, mounted at `/admin` with router-level
+  `requireAuth` + `requireRole("ADMIN")` (no route-by-route repetition):
+  `GET /providers?status=` (default `PENDING`), `POST /providers/:id/approve`,
+  `POST /providers/:id/reject` (optional `reason`, stored in the audit
+  log's `metadata`), `GET /activities` (search/category/ageGroup/provider/
+  flagged/featured filters + pagination — this is the "search and filter"
+  ask, and deliberately unrestricted by approval status since admins need
+  to see everything, unlike the public listing), `PATCH
+  /activities/:id/moderation` (`isFlagged`/`isFeatured`), and
+  `GET /audit-log` (filterable by target) — built so the audit trail is
+  actually readable, not just written.
+- **Closed Step 3's flag**: `GET /activities` (public) now filters to
+  `isActive && !isFlagged && provider.verificationStatus === APPROVED`
+  (or the provider is an `ADMIN`, who has no verification status to
+  check), and orders featured activities first. This only hides
+  activities from the public listing — creation, editing, and a
+  provider's own `GET /activities/mine` are unaffected, so a `PENDING`
+  provider can still build their catalog while awaiting approval (the
+  option Step 3 called "friendlier UX").
+- `prisma/seed.ts` now also seeds a dev **admin bootstrap account**
+  (`admin@rokidspass.local` / `AdminPassword123`) — there is no public
+  registration path to `ADMIN` by design, so this is the only way to get
+  one locally. Seeding order changed so this (and age groups) still runs
+  even if the Stripe-dependent plan seeding fails (see below).
+- Frontend: `PendingProviders` (approve/reject queue, optional rejection
+  reason) and `ActivityModeration` (search/filter form, flag/feature
+  toggles, a live "recent admin actions" panel reading `GET /audit-log`)
+  under `/admin/providers` and `/admin/activities`. Nav shows both for
+  `ADMIN` only.
+
+**Conventions/decisions for future steps:**
+- Router-level `adminRouter.use(requireAuth, requireRole("ADMIN"))` is the
+  pattern for "every route in this file needs the same gate" — cleaner
+  than repeating both middlewares on each handler. Use it for any future
+  role-scoped router.
+- `prisma/seed.ts`'s step ordering matters: Stripe-dependent seeding
+  (`seedPlans`) now runs **last**, after `seedAgeGroups`/`seedAdmin`, so a
+  missing/invalid `STRIPE_SECRET_KEY` (true in this session — see Step 4)
+  doesn't prevent the rest of the seed from completing. Keep any future
+  external-network seed step last for the same reason.
+- Visibility gating (public listing) vs. access gating (creation/editing)
+  are deliberately different mechanisms here — don't conflate "a provider
+  can use the feature" with "the public can see the result." Future admin
+  features (e.g. banning a provider outright) should decide explicitly
+  which one they mean, the way this step had to.
+
+**Flag for whoever picks this up next:**
+- The seeded admin password is a plaintext dev convenience committed to
+  the repo (in `prisma/seed.ts`, not `.env`) — fine for local/throwaway
+  environments, **must not** be how the first real admin account gets
+  created before any actual deployment.
+- Gating is applied only to the public **listing** endpoint
+  (`GET /activities`), not the by-ID detail/sessions endpoints — a
+  pending or flagged activity is unlisted but still reachable by anyone
+  who has (or guesses) its direct URL. Chosen to avoid needing an
+  optional-auth middleware (providers' own management pages fetch by ID
+  without a token) and because none of this step's asks required
+  detail-page-level enforcement. Flag if stronger enforcement is needed
+  later — it would need an `optionalAuth` middleware plus an ownership
+  check on the by-ID routes.
+- No provider suspension/ban after approval — once `APPROVED`, always
+  approved (their activities can still be individually flagged, but the
+  provider account itself has no path back to hidden).
+- No pagination UI on the frontend — `GET /admin/activities` supports
+  `page`/`limit` but `ActivityModeration.tsx` only ever requests the
+  first page. Fine at current data volumes, worth adding pagination
+  controls before this list grows large.
+- This closes the loop the plan called out (provider onboarding from Step
+  2/3, activity management from Step 3) — see **Project Status** at the
+  top of this file for the end-to-end picture and the consolidated list
+  of what's still explicitly out of scope across every step.
+- Verified: 80 backend tests green (9 new in `tests/admin.test.ts`,
+  covering authorization, the approve/reject/audit-log flow, and the
+  flag/feature/search behavior including that admin search bypasses the
+  public visibility gate), both builds clean, and the full flow —
+  provider creates an activity while `PENDING` (confirmed invisible to a
+  browsing parent) → admin approves the provider (confirmed now visible)
+  → admin flags the activity (confirmed invisible again) → audit log
+  shows both actions — was driven across three isolated real-browser
+  sessions (admin/provider/parent) with zero console errors.

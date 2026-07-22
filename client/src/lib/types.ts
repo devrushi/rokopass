@@ -15,6 +15,8 @@ export interface Activity {
   capacity: number;
   creditCost: number;
   isActive: boolean;
+  isFlagged: boolean;
+  isFeatured: boolean;
   ageGroup: AgeGroup;
   createdAt: string;
   updatedAt: string;
@@ -74,4 +76,34 @@ export interface AttendeeBooking {
   status: BookingStatus;
   child: { id: string; firstName: string; lastName: string };
   parent: { id: string; firstName: string; lastName: string; email: string };
+}
+
+export type ProviderVerificationStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface AdminProvider {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  verificationStatus: ProviderVerificationStatus;
+  createdAt: string;
+}
+
+export interface AdminActivity extends Activity {
+  provider: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    verificationStatus: ProviderVerificationStatus | null;
+  };
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+  admin: { id: string; firstName: string; lastName: string };
 }

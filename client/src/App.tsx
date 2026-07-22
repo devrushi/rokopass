@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ActivityModeration } from "./pages/admin/ActivityModeration";
+import { PendingProviders } from "./pages/admin/PendingProviders";
 import { BillingReturn } from "./pages/BillingReturn";
 import { Checkout } from "./pages/Checkout";
 import { Dashboard } from "./pages/Dashboard";
@@ -116,6 +118,22 @@ export default function App() {
           element={
             <ProtectedRoute roles={["PROVIDER", "ADMIN"]}>
               <Roster />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/providers"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <PendingProviders />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/activities"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <ActivityModeration />
             </ProtectedRoute>
           }
         />

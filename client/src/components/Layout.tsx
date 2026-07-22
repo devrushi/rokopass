@@ -53,6 +53,16 @@ export function Layout() {
                   My Activities
                 </Link>
               )}
+              {user.role === "ADMIN" && (
+                <>
+                  <Link to="/admin/providers" onClick={() => setNavOpen(false)}>
+                    Pending Providers
+                  </Link>
+                  <Link to="/admin/activities" onClick={() => setNavOpen(false)}>
+                    Moderate Activities
+                  </Link>
+                </>
+              )}
               <button
                 type="button"
                 className="layout__logout"
