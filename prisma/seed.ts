@@ -58,6 +58,37 @@ const PLANS: PlanSeed[] = [
   },
 ];
 
+interface ProviderPlanSeed {
+  name: string;
+  description: string;
+  maxActiveActivities: number | null;
+  priceGbp: number;
+}
+
+// Provider-facing business tiers — informational only, no Stripe billing (see AGENTS.md).
+// maxActiveActivities is not enforced by any route yet; it's a reference limit an admin can
+// see/set, not a hard cap.
+const PROVIDER_PLANS: ProviderPlanSeed[] = [
+  {
+    name: "Provider Basic",
+    description: "Get started listing activities on RokidsPass.",
+    maxActiveActivities: 3,
+    priceGbp: 0,
+  },
+  {
+    name: "Provider Pro",
+    description: "For growing providers running multiple classes.",
+    maxActiveActivities: 10,
+    priceGbp: 2999,
+  },
+  {
+    name: "Provider Featured",
+    description: "Unlimited activities plus featured placement in search.",
+    maxActiveActivities: null,
+    priceGbp: 7999,
+  },
+];
+
 async function seedAgeGroups() {
   for (const group of AGE_GROUPS) {
     await prisma.ageGroup.upsert({
@@ -110,6 +141,7 @@ async function seedPlans() {
         monthlyCredits: plan.monthlyCredits,
         priceGbp: plan.priceGbp,
         stripePriceId,
+        audience: "PARENT",
       },
       create: {
         name: plan.name,
@@ -117,6 +149,28 @@ async function seedPlans() {
         monthlyCredits: plan.monthlyCredits,
         priceGbp: plan.priceGbp,
         stripePriceId,
+        audience: "PARENT",
+      },
+    });
+  }
+}
+
+async function seedProviderPlans() {
+  for (const plan of PROVIDER_PLANS) {
+    await prisma.plan.upsert({
+      where: { name: plan.name },
+      update: {
+        description: plan.description,
+        maxActiveActivities: plan.maxActiveActivities,
+        priceGbp: plan.priceGbp,
+        audience: "PROVIDER",
+      },
+      create: {
+        name: plan.name,
+        description: plan.description,
+        maxActiveActivities: plan.maxActiveActivities,
+        priceGbp: plan.priceGbp,
+        audience: "PROVIDER",
       },
     });
   }
@@ -179,6 +233,7 @@ async function main() {
   await seedAgeGroups();
   await seedAdmin();
   await seedDemoAccounts();
+  await seedProviderPlans();
   await seedPlans();
 }
 

@@ -191,16 +191,27 @@ model Booking {
   @@index([parentId])
 }
 
+enum PlanAudience {
+  PARENT
+  PROVIDER
+}
+
+// PARENT plans are real Stripe-billed credit packs (monthlyCredits/stripePriceId set,
+// maxActiveActivities null). PROVIDER plans are informational business tiers admin
+// assigns/manages directly — no Stripe billing yet, so stripePriceId stays null and
+// maxActiveActivities carries the tier's listing limit instead of monthlyCredits.
 model Plan {
-  id             String   @id @default(uuid())
-  name           String   @unique
-  description    String
-  monthlyCredits Int
-  priceGbp       Int // pence, e.g. 2999 = £29.99
-  stripePriceId  String   @unique
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                  String       @id @default(uuid())
+  audience            PlanAudience @default(PARENT)
+  name                String       @unique
+  description         String
+  monthlyCredits      Int?
+  priceGbp            Int // pence, e.g. 2999 = £29.99
+  stripePriceId       String?      @unique
+  maxActiveActivities Int?
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
 
   subscriptions Subscription[]
 }

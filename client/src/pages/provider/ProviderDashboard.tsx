@@ -2,10 +2,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { BarList } from "../../components/analytics/BarList";
 import { StatRow, StatTile } from "../../components/analytics/StatTile";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth, type UserProfile } from "../../context/AuthContext";
 import { apiRequest, ApiError } from "../../lib/apiClient";
 import { bookingsByStatusToBarItems } from "../../lib/bookingStatusDisplay";
-import type { Activity, PendingBooking, ProviderAnalytics } from "../../lib/types";
+import type { Activity, PendingBooking, ProviderAnalytics, ProviderPlan } from "../../lib/types";
 import "./provider.css";
 
 export function ProviderDashboard() {
@@ -13,6 +13,7 @@ export function ProviderDashboard() {
   const [activities, setActivities] = useState<Activity[] | null>(null);
   const [pending, setPending] = useState<PendingBooking[] | null>(null);
   const [analytics, setAnalytics] = useState<ProviderAnalytics | null>(null);
+  const [providerPlans, setProviderPlans] = useState<ProviderPlan[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -33,6 +34,11 @@ export function ProviderDashboard() {
     apiRequest<ProviderAnalytics>("/analytics/provider")
       .then((data) => setAnalytics(data))
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load analytics"));
+    apiRequest<{ plans: ProviderPlan[] }>("/billing/provider-plans")
+      .then((data) => setProviderPlans(data.plans))
+      .catch(() => {
+        // Non-critical info panel — a failed fetch shouldn't block the rest of the dashboard.
+      });
     loadPending();
   }, []);
 
@@ -45,10 +51,11 @@ export function ProviderDashboard() {
     setWhatsappError(null);
     setIsSavingWhatsapp(true);
     try {
-      await apiRequest("/auth/me", {
+      const data = await apiRequest<{ user: UserProfile }>("/auth/me", {
         method: "PATCH",
         body: { whatsappNumber: whatsappNumber.trim() || null },
       });
+      setWhatsappNumber(data.user.whatsappNumber ?? "");
       await refreshUser();
     } catch (err) {
       setWhatsappError(err instanceof ApiError ? err.message : "Failed to save WhatsApp number");
@@ -128,6 +135,30 @@ export function ProviderDashboard() {
               />
             </>
           )}
+        </section>
+      )}
+
+      {providerPlans && providerPlans.length > 0 && (
+        <section>
+          <h2>Business tiers</h2>
+          <p className="page-status">
+            Informational for now — RokidsPass doesn't bill providers yet. Contact an admin to
+            move to a different tier.
+          </p>
+          <ul className="activity-list">
+            {providerPlans.map((plan) => (
+              <li key={plan.id} className="activity-card">
+                <div>
+                  <strong>{plan.name}</strong>
+                  <div className="activity-card__meta">{plan.description}</div>
+                </div>
+                <span className="activity-card__meta">
+                  £{(plan.priceGbp / 100).toFixed(2)}/mo ·{" "}
+                  {plan.maxActiveActivities === null ? "unlimited" : plan.maxActiveActivities} activities
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

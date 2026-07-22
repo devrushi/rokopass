@@ -137,6 +137,63 @@ export interface AdminActivity extends Activity {
   };
 }
 
+export type PlanAudience = "PARENT" | "PROVIDER";
+
+export interface AdminPlan {
+  id: string;
+  audience: PlanAudience;
+  name: string;
+  description: string;
+  monthlyCredits: number | null;
+  maxActiveActivities: number | null;
+  priceGbp: number;
+  stripePriceId: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProviderPlan {
+  id: string;
+  name: string;
+  description: string;
+  maxActiveActivities: number | null;
+  priceGbp: number;
+}
+
+export interface AdminParent {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  createdAt: string;
+  _count: { children: number; bookings: number };
+}
+
+export interface AdminChild {
+  id: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  createdAt: string;
+  parent: { id: string; firstName: string; lastName: string; email: string };
+  _count: { bookings: number };
+}
+
+export interface AdminBooking {
+  id: string;
+  status: BookingStatus;
+  creditsSpent: number;
+  createdAt: string;
+  child: { id: string; firstName: string; lastName: string };
+  parent: { id: string; firstName: string; lastName: string; email: string };
+  session: {
+    id: string;
+    startsAt: string;
+    activity: { id: string; title: string; providerId: string };
+  };
+}
+
 export interface AuditLogEntry {
   id: string;
   action: string;

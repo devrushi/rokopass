@@ -15,7 +15,7 @@ export async function getCreditBalance(userId: string): Promise<number> {
 
 export interface CreditSummary {
   balance: number;
-  plan: { id: string; name: string; monthlyCredits: number } | null;
+  plan: { id: string; name: string; monthlyCredits: number | null } | null;
   subscriptionStatus: string | null;
   currentPeriodEnd: Date | null;
 }

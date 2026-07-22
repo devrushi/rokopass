@@ -35,11 +35,11 @@ export function Layout() {
               >
                 Dashboard
               </Link>
-              <Link to="/plans" onClick={() => setNavOpen(false)}>
-                Plans
-              </Link>
-              {(user.role === "PARENT" || user.role === "ADMIN") && (
+              {user.role === "PARENT" && (
                 <>
+                  <Link to="/plans" onClick={() => setNavOpen(false)}>
+                    Plans
+                  </Link>
                   <Link to="/browse" onClick={() => setNavOpen(false)}>
                     Browse Activities
                   </Link>
@@ -51,18 +51,30 @@ export function Layout() {
                   </Link>
                 </>
               )}
-              {(user.role === "PROVIDER" || user.role === "ADMIN") && (
+              {user.role === "PROVIDER" && (
                 <Link to="/provider/activities" onClick={() => setNavOpen(false)}>
                   My Activities
                 </Link>
               )}
               {user.role === "ADMIN" && (
                 <>
-                  <Link to="/admin/providers" onClick={() => setNavOpen(false)}>
-                    Pending Providers
+                  <Link to="/admin/children" onClick={() => setNavOpen(false)}>
+                    Children
+                  </Link>
+                  <Link to="/admin/parents" onClick={() => setNavOpen(false)}>
+                    Parents
+                  </Link>
+                  <Link to="/admin/bookings" onClick={() => setNavOpen(false)}>
+                    Bookings
                   </Link>
                   <Link to="/admin/activities" onClick={() => setNavOpen(false)}>
-                    Moderate Activities
+                    Activities
+                  </Link>
+                  <Link to="/admin/providers" onClick={() => setNavOpen(false)}>
+                    Providers
+                  </Link>
+                  <Link to="/admin/plans" onClick={() => setNavOpen(false)}>
+                    Plans
                   </Link>
                 </>
               )}

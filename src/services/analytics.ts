@@ -12,7 +12,7 @@ function round1(value: number): number {
 
 export interface ParentAnalytics {
   balance: number;
-  plan: { id: string; name: string; monthlyCredits: number } | null;
+  plan: { id: string; name: string; monthlyCredits: number | null } | null;
   currentPeriodEnd: Date | null;
   creditsUsedLast30Days: number;
   spendingByCategory: { category: string; creditsSpent: number }[];

@@ -52,6 +52,15 @@ below) is complete end-to-end for that core loop:
   usage and per-child attendance; providers see attendance/capacity/
   approval-speed/repeat-booking rates; admins see platform-wide growth
   and moderation-throughput numbers.
+- **Role-scoped navigation** — each role only sees its own "my stuff"
+  routes (parents: Plans/Browse/Children/Bookings; providers: My
+  Activities). Admin has no personal end-user routes at all — its nav is
+  purely platform-wide oversight: Children, Parents, Bookings,
+  Activities, Providers, Plans, each a searchable/filterable list.
+- **Plans have an audience** — `Plan.audience` is `PARENT` (real
+  Stripe-billed credit packs) or `PROVIDER` (informational business
+  tiers, no billing yet — see the relevant log entry). Admin has full
+  CRUD over both from `/admin/plans`.
 
 **Explicitly not done** — flagged in detail in the relevant log entries,
 summarized here: no live Stripe verification was performed (all Stripe
@@ -867,3 +876,65 @@ suite still 106/106; frontend build clean. Each of the three buttons was
 clicked in an isolated browser context and confirmed to land on the
 correct role's dashboard (`/dashboard`, `/provider`, `/admin`) with zero
 console errors.
+
+### 2026-07-22 — Admin Platform Views, Provider vs Parent Plans, WhatsApp Fix
+
+Three requests handled together: admin's nav had drifted into showing
+parent/provider "my stuff" (Plans, Browse, My Children, My Bookings, My
+Activities) via `roles={["...", "ADMIN"]}` on those routes — admin should
+only see platform-wide oversight, not act as a customer. Separately, the
+one shared `Plan` list didn't distinguish parent credit-packs from
+anything provider-relevant. A WhatsApp-field robustness fix rode along.
+
+**Built:**
+- **Admin platform views** — three new list pages, `/admin/children`,
+  `/admin/parents`, `/admin/bookings` (search + status filter for
+  bookings), backed by new `GET /admin/children|parents|bookings`
+  endpoints. Nav and `App.tsx` routes reworked so each role only sees its
+  own routes: `roles={["ADMIN"]}` removed from every parent/provider
+  route (`/plans`, `/browse`, `/children`, `/bookings`, `/provider/*`),
+  and ADMIN's nav is now exclusively Children/Parents/Bookings/
+  Activities/Providers/Plans — no personal end-user path exists for that
+  role anymore, by route restriction, not just hidden nav links.
+- **`Plan.audience`** (`PARENT`/`PROVIDER`, migration
+  `20260722150000_add_plan_audience`) — `monthlyCredits` and
+  `stripePriceId` are now nullable (only meaningful for `PARENT` plans),
+  a new nullable `maxActiveActivities` is `PROVIDER`-only. Chose
+  **informational business tiers over real billing** for providers after
+  checking with the user first — Stripe isn't fully live in this project
+  anyway (see Step 4), so a second billed subscription type would have
+  been a lot of build for a demo. `GET /billing/plans` now filters to
+  `audience: PARENT`; new `GET /billing/provider-plans` lists the
+  provider tiers read-only (shown on `ProviderDashboard` under "Business
+  tiers" — no self-serve upgrade flow, admin manages tier definitions).
+  Checkout (`POST /billing/checkout-session`) now rejects non-PARENT or
+  billing-less plans defensively. Full CRUD (`GET/POST/PATCH/DELETE
+  /admin/plans`) on `/admin/plans`, filterable by audience, with delete
+  blocked (409) if a `PARENT` plan still has subscriptions attached
+  (Postgres FK restrict, caught and turned into a clear error rather than
+  a raw 500).
+  **Note found while re-seeding:** the local dev DB has no
+  `_prisma_migrations` tracking table (schema was built via ad-hoc SQL/
+  `db push` at some point, not `migrate deploy`), and the 3 parent credit
+  plans seeded via raw SQL earlier this project (see the "what plans" log
+  entry) were gone by this pass — re-inserted the same way. Whoever
+  deploys this for real should baseline the migration history properly
+  first (`prisma migrate resolve --applied` per existing migration, or a
+  fresh `migrate deploy` against an empty database).
+- **WhatsApp field fix** — `ProviderDashboard`'s number field only
+  updated from a separate `refreshUser()` round-trip after saving, not
+  from the save response itself. Couldn't reproduce actual staleness
+  under either a fresh save or a reload of a pre-existing number, but
+  closed the gap anyway: the field now sets directly from the `PATCH
+  /auth/me` response before the (still-run, for the rest of the app's
+  `user` context) `refreshUser()` call, removing the window entirely
+  rather than leaving it to chance.
+
+**Verified:** 106 backend tests still green, both builds clean. Browser
+pass per role confirmed: nav links are role-exclusive (parent sees
+Plans/Browse/Children/Bookings, provider sees only My Activities, admin
+sees the six platform-wide sections and nothing else); admin hitting
+`/children` or provider hitting `/plans` now shows the access-denied
+page, not the page itself; `/admin/plans` full CRUD cycle (create a
+provider tier → edit its name → deactivate → delete) exercised
+end-to-end in a real browser, not just unit-tested.

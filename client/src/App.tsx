@@ -3,7 +3,11 @@ import { HomeRedirect } from "./components/HomeRedirect";
 import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ActivityModeration } from "./pages/admin/ActivityModeration";
+import { AdminBookings } from "./pages/admin/AdminBookings";
+import { AdminChildren } from "./pages/admin/AdminChildren";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
+import { AdminParents } from "./pages/admin/AdminParents";
+import { AdminPlans } from "./pages/admin/AdminPlans";
 import { PendingProviders } from "./pages/admin/PendingProviders";
 import { BillingReturn } from "./pages/BillingReturn";
 import { Checkout } from "./pages/Checkout";
@@ -31,7 +35,7 @@ export default function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["PARENT"]}>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -39,7 +43,7 @@ export default function App() {
         <Route
           path="/plans"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["PARENT"]}>
               <Plans />
             </ProtectedRoute>
           }
@@ -47,7 +51,7 @@ export default function App() {
         <Route
           path="/billing/checkout/:planId"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["PARENT"]}>
               <Checkout />
             </ProtectedRoute>
           }
@@ -55,7 +59,7 @@ export default function App() {
         <Route
           path="/billing/return"
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={["PARENT"]}>
               <BillingReturn />
             </ProtectedRoute>
           }
@@ -63,7 +67,7 @@ export default function App() {
         <Route
           path="/children"
           element={
-            <ProtectedRoute roles={["PARENT", "ADMIN"]}>
+            <ProtectedRoute roles={["PARENT"]}>
               <Children />
             </ProtectedRoute>
           }
@@ -71,7 +75,7 @@ export default function App() {
         <Route
           path="/browse"
           element={
-            <ProtectedRoute roles={["PARENT", "ADMIN"]}>
+            <ProtectedRoute roles={["PARENT"]}>
               <Browse />
             </ProtectedRoute>
           }
@@ -79,7 +83,7 @@ export default function App() {
         <Route
           path="/browse/:id"
           element={
-            <ProtectedRoute roles={["PARENT", "ADMIN"]}>
+            <ProtectedRoute roles={["PARENT"]}>
               <ActivityBrowseDetail />
             </ProtectedRoute>
           }
@@ -87,7 +91,7 @@ export default function App() {
         <Route
           path="/bookings"
           element={
-            <ProtectedRoute roles={["PARENT", "ADMIN"]}>
+            <ProtectedRoute roles={["PARENT"]}>
               <MyBookings />
             </ProtectedRoute>
           }
@@ -95,7 +99,7 @@ export default function App() {
         <Route
           path="/provider"
           element={
-            <ProtectedRoute roles={["PROVIDER", "ADMIN"]}>
+            <ProtectedRoute roles={["PROVIDER"]}>
               <ProviderDashboard />
             </ProtectedRoute>
           }
@@ -103,7 +107,7 @@ export default function App() {
         <Route
           path="/provider/activities"
           element={
-            <ProtectedRoute roles={["PROVIDER", "ADMIN"]}>
+            <ProtectedRoute roles={["PROVIDER"]}>
               <ActivitiesList />
             </ProtectedRoute>
           }
@@ -111,7 +115,7 @@ export default function App() {
         <Route
           path="/provider/activities/new"
           element={
-            <ProtectedRoute roles={["PROVIDER", "ADMIN"]}>
+            <ProtectedRoute roles={["PROVIDER"]}>
               <ActivityForm />
             </ProtectedRoute>
           }
@@ -119,7 +123,7 @@ export default function App() {
         <Route
           path="/provider/activities/:id"
           element={
-            <ProtectedRoute roles={["PROVIDER", "ADMIN"]}>
+            <ProtectedRoute roles={["PROVIDER"]}>
               <ActivityDetail />
             </ProtectedRoute>
           }
@@ -127,7 +131,7 @@ export default function App() {
         <Route
           path="/provider/sessions/:sessionId/roster"
           element={
-            <ProtectedRoute roles={["PROVIDER", "ADMIN"]}>
+            <ProtectedRoute roles={["PROVIDER"]}>
               <Roster />
             </ProtectedRoute>
           }
@@ -153,6 +157,38 @@ export default function App() {
           element={
             <ProtectedRoute roles={["ADMIN"]}>
               <ActivityModeration />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/children"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminChildren />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/parents"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminParents />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/bookings"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminBookings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/plans"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminPlans />
             </ProtectedRoute>
           }
         />

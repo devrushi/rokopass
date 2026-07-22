@@ -13,7 +13,21 @@ export const billingRouter = Router();
 billingRouter.get("/plans", async (_req, res, next) => {
   try {
     const plans = await prisma.plan.findMany({
-      where: { isActive: true },
+      where: { isActive: true, audience: "PARENT" },
+      orderBy: { priceGbp: "asc" },
+    });
+    res.json({ plans });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Informational only — provider tiers aren't Stripe-billed yet (see AGENTS.md), so this just
+// lists what's available for a provider to see on their dashboard.
+billingRouter.get("/provider-plans", async (_req, res, next) => {
+  try {
+    const plans = await prisma.plan.findMany({
+      where: { isActive: true, audience: "PROVIDER" },
       orderBy: { priceGbp: "asc" },
     });
     res.json({ plans });
@@ -39,7 +53,7 @@ billingRouter.post("/checkout-session", requireAuth, async (req, res, next) => {
     }
 
     const plan = await prisma.plan.findUnique({ where: { id: parsed.data.planId } });
-    if (!plan || !plan.isActive) {
+    if (!plan || !plan.isActive || plan.audience !== "PARENT" || !plan.stripePriceId) {
       throw new AppError("Plan not found", 404);
     }
 

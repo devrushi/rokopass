@@ -22,11 +22,23 @@ export function AdminDashboard() {
       <div className="provider-page__header">
         <h1>Admin Dashboard</h1>
         <div className="session-row__actions">
-          <Link to="/admin/providers" className="button">
-            Pending providers
+          <Link to="/admin/children" className="button">
+            Children
+          </Link>
+          <Link to="/admin/parents" className="button">
+            Parents
+          </Link>
+          <Link to="/admin/bookings" className="button">
+            Bookings
           </Link>
           <Link to="/admin/activities" className="button">
-            Activity moderation
+            Activities
+          </Link>
+          <Link to="/admin/providers" className="button">
+            Providers
+          </Link>
+          <Link to="/admin/plans" className="button">
+            Plans
           </Link>
         </div>
       </div>

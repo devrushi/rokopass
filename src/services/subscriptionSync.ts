@@ -49,8 +49,8 @@ export async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Se
   }
 
   const plan = await prisma.plan.findUnique({ where: { id: planId } });
-  if (!plan) {
-    console.error("checkout.session.completed referenced an unknown plan", { planId });
+  if (!plan || plan.monthlyCredits === null) {
+    console.error("checkout.session.completed referenced an unknown or non-credit plan", { planId });
     return;
   }
 
@@ -102,8 +102,8 @@ export async function handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> 
     where: { stripeSubscriptionId: subscriptionId },
     include: { plan: true },
   });
-  if (!subscription) {
-    console.error("invoice.paid for an unknown subscription", { subscriptionId });
+  if (!subscription || subscription.plan.monthlyCredits === null) {
+    console.error("invoice.paid for an unknown or non-credit subscription", { subscriptionId });
     return;
   }
 
