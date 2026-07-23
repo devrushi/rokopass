@@ -10,6 +10,7 @@ const validEnv = {
   JWT_REFRESH_SECRET: "b".repeat(32),
   STRIPE_SECRET_KEY: "sk_test_fake",
   STRIPE_WEBHOOK_SECRET: "whsec_fake",
+  ANTHROPIC_API_KEY: "sk-ant-fake",
 };
 
 describe("envSchema", () => {
@@ -24,14 +25,21 @@ describe("envSchema", () => {
   });
 
   it("defaults NODE_ENV, PORT, CORS_ORIGIN, and CLIENT_URL when omitted", () => {
-    const { DATABASE_URL, JWT_ACCESS_SECRET, JWT_REFRESH_SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET } =
-      validEnv;
+    const {
+      DATABASE_URL,
+      JWT_ACCESS_SECRET,
+      JWT_REFRESH_SECRET,
+      STRIPE_SECRET_KEY,
+      STRIPE_WEBHOOK_SECRET,
+      ANTHROPIC_API_KEY,
+    } = validEnv;
     const result = envSchema.parse({
       DATABASE_URL,
       JWT_ACCESS_SECRET,
       JWT_REFRESH_SECRET,
       STRIPE_SECRET_KEY,
       STRIPE_WEBHOOK_SECRET,
+      ANTHROPIC_API_KEY,
     });
     expect(result.NODE_ENV).toBe("development");
     expect(result.PORT).toBe(3000);

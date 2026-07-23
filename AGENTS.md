@@ -1019,3 +1019,58 @@ allergy info → books the activity → provider's pending-approval list
 shows the allergy warning → admin's pending-providers queue shows a
 freshly-registered provider's "No DBS certificate on file" warning. Zero
 console errors throughout.
+
+### 2026-07-23 — Phase 2: AI Analytics Insights and AI Chat Navigator
+
+Second phase of the client roadmap, now that an Anthropic API key is
+available. Two features, both backed by `@anthropic-ai/sdk`.
+
+**Built:**
+- `src/lib/anthropic.ts` — SDK client singleton (same pattern as
+  `src/lib/stripe.ts`) plus `AI_MODEL = "claude-haiku-4-5-20251001"`.
+  Haiku, not Sonnet/Opus — every AI feature here is a short, low-stakes
+  text response (a few analytics bullets, a chat reply), not a task
+  needing frontier reasoning, so the cheaper/faster model was the
+  deliberate choice, not a placeholder to upgrade later.
+- **AI analytics insights** (`src/services/aiInsights.ts`) — takes the
+  *already-computed* analytics object (reuses `getParentAnalytics`/
+  `getProviderAnalytics`/`getAdminAnalytics` from the earlier analytics
+  work, doesn't recompute anything) and asks Claude for 2-4 short bullet
+  points, explicitly instructed never to invent a number not present in
+  the JSON. New `POST /analytics/parent/insights`,
+  `POST /analytics/provider/insights`, `POST /admin/analytics/insights`
+  — **on-request, not auto-loaded**: a "Get AI insights" button
+  (new `AiInsights.tsx` component, reused across all three dashboards)
+  triggers one call, so opening a dashboard never costs an API call on
+  its own.
+- **AI chat navigator** (`src/services/aiChat.ts`, `POST /ai/chat`,
+  new `Chat.tsx` page at `/chat`) — role-aware, stateless (client holds
+  conversation history, resends it each turn, capped at 20 messages/2000
+  chars each via `schemas/ai.ts`). **Parents** get a real-data system
+  prompt: every currently-listed, non-flagged, approved-provider activity
+  (title/category/age range/location/price/SEND flag) is fetched fresh
+  from Postgres and stuffed into the prompt on every call — deliberately
+  simple full-context injection rather than a vector DB, since the
+  activity catalogue is small enough that this is both cheaper and more
+  accurate than building real RAG for it. **Providers** get a static
+  system prompt describing actual platform features (creating
+  activities/schedules, approving bookings, WhatsApp/social links, DBS
+  submission, business tiers) — no DB access needed, it's a how-to guide.
+  Both prompts explicitly forbid inventing activities/features not
+  listed. Scoped to `PARENT`/`PROVIDER` only per an explicit decision —
+  admin doesn't get this (admin's tools are platform oversight, not
+  "help me use the app").
+- Both AI call sites wrap SDK failures in a generic `AppError(...,502)`
+  ("temporarily unavailable") rather than leaking raw SDK errors — tested
+  directly (`tests/ai.test.ts` mocks `@anthropic-ai/sdk` the same way
+  Stripe is mocked, so CI never needs a real key) and confirmed live: with
+  the placeholder key still in `.env`, both features fail gracefully in a
+  real browser (clean error message, no crash) rather than throwing.
+- `ANTHROPIC_API_KEY` added to `envSchema` (required, like the Stripe
+  keys), `.env`/`.env.example`, and the CI workflow's placeholder env
+  block.
+
+**Verified:** 116 backend tests green (10 new), both builds clean. Real
+browser pass confirmed the nav link, the chat UI, and the insights button
+all render and degrade gracefully against the placeholder key — the
+actual AI responses will render once a real `ANTHROPIC_API_KEY` is set.

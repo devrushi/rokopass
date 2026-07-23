@@ -56,6 +56,11 @@ export function Layout() {
                   My Activities
                 </Link>
               )}
+              {(user.role === "PARENT" || user.role === "PROVIDER") && (
+                <Link to="/chat" onClick={() => setNavOpen(false)}>
+                  Ask AI
+                </Link>
+              )}
               {user.role === "ADMIN" && (
                 <>
                   <Link to="/admin/children" onClick={() => setNavOpen(false)}>

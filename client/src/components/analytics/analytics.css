@@ -103,3 +103,18 @@
   text-align: right;
   min-width: 2.5em;
 }
+
+.ai-insights {
+  margin: 1rem 0;
+}
+
+.ai-insights__text {
+  margin-top: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--viz-sequential) 6%, transparent);
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}

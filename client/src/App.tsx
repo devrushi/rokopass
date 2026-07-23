@@ -10,6 +10,7 @@ import { AdminParents } from "./pages/admin/AdminParents";
 import { AdminPlans } from "./pages/admin/AdminPlans";
 import { PendingProviders } from "./pages/admin/PendingProviders";
 import { BillingReturn } from "./pages/BillingReturn";
+import { Chat } from "./pages/Chat";
 import { Checkout } from "./pages/Checkout";
 import { Dashboard } from "./pages/Dashboard";
 import { Login } from "./pages/Login";
@@ -133,6 +134,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={["PROVIDER"]}>
               <Roster />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chat"
+          element={
+            <ProtectedRoute roles={["PARENT", "PROVIDER"]}>
+              <Chat />
             </ProtectedRoute>
           }
         />

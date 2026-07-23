@@ -16,6 +16,7 @@ import {
   rejectProviderSchema,
 } from "../schemas/admin";
 import { serializeUser } from "../lib/serializeUser";
+import { getAdminInsights } from "../services/aiInsights";
 import { getAdminAnalytics } from "../services/analytics";
 
 export const adminRouter = Router();
@@ -460,6 +461,16 @@ adminRouter.get("/analytics", async (_req, res, next) => {
   try {
     const data = await getAdminAnalytics();
     res.json(data);
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.post("/analytics/insights", async (_req, res, next) => {
+  try {
+    const analytics = await getAdminAnalytics();
+    const insights = await getAdminInsights(analytics);
+    res.json({ insights });
   } catch (err) {
     next(err);
   }

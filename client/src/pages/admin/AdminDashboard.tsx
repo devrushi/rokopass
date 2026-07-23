@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { AiInsights } from "../../components/analytics/AiInsights";
 import { BarList } from "../../components/analytics/BarList";
 import { StatRow, StatTile } from "../../components/analytics/StatTile";
 import { apiRequest, ApiError } from "../../lib/apiClient";
@@ -79,6 +80,8 @@ export function AdminDashboard() {
             <StatTile label="Featured activities" value={String(analytics.featuredActivitiesCount)} />
             <StatTile label="Audit log volume (30d)" value={String(analytics.auditLogVolumeLast30Days)} />
           </StatRow>
+
+          <AiInsights endpoint="/admin/analytics/insights" />
 
           {Object.keys(analytics.bookingsByStatus).length > 0 && (
             <>

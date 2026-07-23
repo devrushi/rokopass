@@ -12,6 +12,7 @@ export const envSchema = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default("30d"),
   STRIPE_SECRET_KEY: z.string().min(1, "STRIPE_SECRET_KEY is required"),
   STRIPE_WEBHOOK_SECRET: z.string().min(1, "STRIPE_WEBHOOK_SECRET is required"),
+  ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required"),
   CLIENT_URL: z.string().default("http://localhost:5173"),
 });
 

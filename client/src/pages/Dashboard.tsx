@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { AiInsights } from "../components/analytics/AiInsights";
 import { BarList } from "../components/analytics/BarList";
 import { StatRow, StatTile } from "../components/analytics/StatTile";
 import { useAuth, type UserProfile } from "../context/AuthContext";
@@ -115,6 +116,8 @@ export function Dashboard() {
             <StatTile label="Credit balance" value={String(analytics.balance)} />
             <StatTile label="Used in last 30 days" value={String(analytics.creditsUsedLast30Days)} hint="credits" />
           </StatRow>
+
+          <AiInsights endpoint="/analytics/parent/insights" />
 
           {analytics.spendingByCategory.length > 0 && (
             <>

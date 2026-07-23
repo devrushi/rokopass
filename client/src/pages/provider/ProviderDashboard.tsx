@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { AiInsights } from "../../components/analytics/AiInsights";
 import { BarList } from "../../components/analytics/BarList";
 import { StatRow, StatTile } from "../../components/analytics/StatTile";
 import { useAuth, type UserProfile } from "../../context/AuthContext";
@@ -190,6 +191,8 @@ export function ProviderDashboard() {
               value={analytics.repeatBookingRatePercent === null ? "—" : `${analytics.repeatBookingRatePercent}%`}
             />
           </StatRow>
+
+          <AiInsights endpoint="/analytics/provider/insights" />
 
           {Object.keys(analytics.bookingsByStatus).length > 0 && (
             <>
