@@ -71,6 +71,31 @@ export interface CreditSummary {
   currentPeriodEnd: string | null;
 }
 
+export interface CharityPoolStats {
+  poolBalance: number;
+  totalDonated: number;
+  totalGranted: number;
+  recentDonations: { id: string; amount: number; createdAt: string; donorFirstName: string; donorLastName: string }[];
+  recentGrants: {
+    id: string;
+    amount: number;
+    createdAt: string;
+    recipientFirstName: string;
+    recipientLastName: string;
+  }[];
+}
+
+export interface Invoice {
+  id: string;
+  number: string | null;
+  status: string | null;
+  amountPaid: number;
+  currency: string;
+  created: string;
+  hostedInvoiceUrl: string | null;
+  invoicePdf: string | null;
+}
+
 export interface Child {
   id: string;
   firstName: string;

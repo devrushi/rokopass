@@ -41,6 +41,9 @@ export function AdminDashboard() {
           <Link to="/admin/plans" className="button">
             Plans
           </Link>
+          <Link to="/admin/charity" className="button">
+            Charity
+          </Link>
         </div>
       </div>
 

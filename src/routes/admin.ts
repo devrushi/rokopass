@@ -18,6 +18,8 @@ import {
 import { serializeUser } from "../lib/serializeUser";
 import { getAdminInsights } from "../services/aiInsights";
 import { getAdminAnalytics } from "../services/analytics";
+import { grantCharityCredits, getCharityPoolStats } from "../services/charity";
+import { grantSchema } from "../schemas/charity";
 
 export const adminRouter = Router();
 
@@ -471,6 +473,40 @@ adminRouter.post("/analytics/insights", async (_req, res, next) => {
     const analytics = await getAdminAnalytics();
     const insights = await getAdminInsights(analytics);
     res.json({ insights });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Community fund (charity) ---
+
+adminRouter.get("/charity", async (_req, res, next) => {
+  try {
+    const stats = await getCharityPoolStats();
+    res.json(stats);
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.post("/charity/grant", async (req, res, next) => {
+  try {
+    const parsed = grantSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(parsed.error.issues[0]?.message ?? "Invalid grant request", 400);
+    }
+
+    const recipient = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+    if (!recipient || recipient.role !== "PARENT") {
+      throw new AppError("No parent found with that email", 404);
+    }
+
+    const result = await grantCharityCredits({
+      adminId: req.user!.sub,
+      recipientId: recipient.id,
+      amount: parsed.data.amount,
+    });
+    res.json(result);
   } catch (err) {
     next(err);
   }

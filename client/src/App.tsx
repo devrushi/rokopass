@@ -4,6 +4,7 @@ import { Layout } from "./components/Layout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { ActivityModeration } from "./pages/admin/ActivityModeration";
 import { AdminBookings } from "./pages/admin/AdminBookings";
+import { AdminCharity } from "./pages/admin/AdminCharity";
 import { AdminChildren } from "./pages/admin/AdminChildren";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminParents } from "./pages/admin/AdminParents";
@@ -17,6 +18,7 @@ import { Login } from "./pages/Login";
 import { ActivityBrowseDetail } from "./pages/parent/ActivityBrowseDetail";
 import { Browse } from "./pages/parent/Browse";
 import { Children } from "./pages/parent/Children";
+import { Invoices } from "./pages/parent/Invoices";
 import { MyBookings } from "./pages/parent/MyBookings";
 import { Plans } from "./pages/Plans";
 import { ActivitiesList } from "./pages/provider/ActivitiesList";
@@ -138,6 +140,14 @@ export default function App() {
           }
         />
         <Route
+          path="/billing/invoices"
+          element={
+            <ProtectedRoute roles={["PARENT"]}>
+              <Invoices />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/chat"
           element={
             <ProtectedRoute roles={["PARENT", "PROVIDER"]}>
@@ -190,6 +200,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={["ADMIN"]}>
               <AdminBookings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/charity"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminCharity />
             </ProtectedRoute>
           }
         />

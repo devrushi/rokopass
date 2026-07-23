@@ -269,6 +269,12 @@ enum CreditTransactionReason {
   BOOKING
   BOOKING_REFUND
   ADMIN_ADJUSTMENT
+  // A parent donates spare credits into the community fund (negative, on the donor's ledger)
+  // and an admin grants pooled credits to a family in need (positive, on the recipient's
+  // ledger). The fund's available balance is computed on read from these two reasons — no
+  // separate mutable balance column — see src/services/charity.ts.
+  CHARITY_DONATION
+  CHARITY_GRANT
 }
 
 // A user's credit balance is the sum of their transactions, not a mutable counter — an
@@ -305,6 +311,7 @@ enum AuditAction {
   ACTIVITY_UNFLAGGED
   ACTIVITY_FEATURED
   ACTIVITY_UNFEATURED
+  CHARITY_GRANT_ISSUED
 }
 
 // Every admin moderation action writes one row here — the "audit logs" the approve/reject and

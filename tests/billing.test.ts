@@ -1,15 +1,17 @@
 import request from "supertest";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { customersCreateMock, checkoutSessionsCreateMock } = vi.hoisted(() => ({
+const { customersCreateMock, checkoutSessionsCreateMock, invoicesListMock } = vi.hoisted(() => ({
   customersCreateMock: vi.fn(),
   checkoutSessionsCreateMock: vi.fn(),
+  invoicesListMock: vi.fn(),
 }));
 
 vi.mock("../src/lib/stripe", () => ({
   stripe: {
     customers: { create: customersCreateMock },
     checkout: { sessions: { create: checkoutSessionsCreateMock } },
+    invoices: { list: invoicesListMock },
   },
 }));
 
@@ -120,5 +122,55 @@ describe("POST /billing/checkout-session", () => {
     // Customer should not be created again — the existing stripeCustomerId is reused.
     expect(customersCreateMock).toHaveBeenCalledTimes(1);
     expect(checkoutSessionsCreateMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("GET /billing/invoices", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("requires authentication", async () => {
+    const res = await request(app).get("/billing/invoices");
+    expect(res.status).toBe(401);
+  });
+
+  it("returns an empty list for a user with no Stripe customer yet", async () => {
+    const { token } = await registerParent();
+    const res = await request(app).get("/billing/invoices").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.invoices).toEqual([]);
+    expect(invoicesListMock).not.toHaveBeenCalled();
+  });
+
+  it("lists Stripe invoices for a user with a customer ID", async () => {
+    const { token, id: userId } = await registerParent();
+    await prisma.user.update({ where: { id: userId }, data: { stripeCustomerId: "cus_test_invoices" } });
+
+    invoicesListMock.mockResolvedValue({
+      data: [
+        {
+          id: "in_123",
+          number: "INV-001",
+          status: "paid",
+          amount_paid: 1999,
+          currency: "gbp",
+          created: 1700000000,
+          hosted_invoice_url: "https://stripe.example/invoice/123",
+          invoice_pdf: "https://stripe.example/invoice/123.pdf",
+        },
+      ],
+    });
+
+    const res = await request(app).get("/billing/invoices").set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.invoices).toHaveLength(1);
+    expect(res.body.invoices[0]).toMatchObject({
+      id: "in_123",
+      number: "INV-001",
+      amountPaid: 1999,
+      hostedInvoiceUrl: "https://stripe.example/invoice/123",
+    });
+    expect(invoicesListMock).toHaveBeenCalledWith({ customer: "cus_test_invoices", limit: 24 });
   });
 });

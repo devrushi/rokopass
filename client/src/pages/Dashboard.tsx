@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AiInsights } from "../components/analytics/AiInsights";
 import { BarList } from "../components/analytics/BarList";
 import { StatRow, StatTile } from "../components/analytics/StatTile";
+import { CommunityFund } from "../components/CommunityFund";
 import { useAuth, type UserProfile } from "../context/AuthContext";
 import { apiRequest, ApiError } from "../lib/apiClient";
 import type { CreditSummary, ParentAnalytics } from "../lib/types";
@@ -108,6 +109,8 @@ export function Dashboard() {
           </Link>
         </div>
       )}
+
+      <CommunityFund />
 
       {analytics && (
         <>

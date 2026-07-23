@@ -49,6 +49,9 @@ export function Layout() {
                   <Link to="/bookings" onClick={() => setNavOpen(false)}>
                     My Bookings
                   </Link>
+                  <Link to="/billing/invoices" onClick={() => setNavOpen(false)}>
+                    Invoices
+                  </Link>
                 </>
               )}
               {user.role === "PROVIDER" && (
@@ -80,6 +83,9 @@ export function Layout() {
                   </Link>
                   <Link to="/admin/plans" onClick={() => setNavOpen(false)}>
                     Plans
+                  </Link>
+                  <Link to="/admin/charity" onClick={() => setNavOpen(false)}>
+                    Charity
                   </Link>
                 </>
               )}
