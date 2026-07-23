@@ -8,6 +8,7 @@ export const createActivitySchema = z.object({
   location: z.string().min(1, "Location is required"),
   capacity: z.coerce.number().int().positive("Capacity must be a positive number"),
   creditCost: z.coerce.number().int().positive("Credit cost must be a positive number"),
+  isSendFriendly: z.boolean().optional(),
 });
 
 export const updateActivitySchema = createActivitySchema.partial().extend({

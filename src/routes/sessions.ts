@@ -60,7 +60,7 @@ sessionsRouter.get(
           status: { in: ["PENDING_APPROVAL", "CONFIRMED", "ATTENDED", "NO_SHOW"] },
         },
         include: {
-          child: { select: { id: true, firstName: true, lastName: true } },
+          child: { select: { id: true, firstName: true, lastName: true, allergyInfo: true } },
           parent: { select: { id: true, firstName: true, lastName: true, email: true } },
         },
         orderBy: { createdAt: "asc" },

@@ -74,18 +74,51 @@ export function ActivityBrowseDetail() {
           <p className="activity-card__meta">
             {activity.category} · {activity.ageGroup.label} · {activity.location} ·{" "}
             {activity.creditCost} credits per class
+            {activity.isSendFriendly && " · SEND-friendly"}
           </p>
         </div>
-        {activity.provider.whatsappNumber && (
-          <a
-            href={whatsappChatUrl(activity.provider.whatsappNumber, activity.title)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="button"
-          >
-            Chat on WhatsApp
-          </a>
-        )}
+        <div className="session-row__actions">
+          {activity.provider.instagramUrl && (
+            <a
+              href={activity.provider.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="button button--secondary"
+            >
+              Instagram
+            </a>
+          )}
+          {activity.provider.facebookUrl && (
+            <a
+              href={activity.provider.facebookUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="button button--secondary"
+            >
+              Facebook
+            </a>
+          )}
+          {activity.provider.tiktokUrl && (
+            <a
+              href={activity.provider.tiktokUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="button button--secondary"
+            >
+              TikTok
+            </a>
+          )}
+          {activity.provider.whatsappNumber && (
+            <a
+              href={whatsappChatUrl(activity.provider.whatsappNumber, activity.title)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="button"
+            >
+              Chat on WhatsApp
+            </a>
+          )}
+        </div>
       </div>
 
       <p>{activity.description}</p>

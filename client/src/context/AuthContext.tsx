@@ -9,6 +9,11 @@ export interface UserProfile {
   lastName: string;
   role: string;
   whatsappNumber: string | null;
+  instagramUrl: string | null;
+  facebookUrl: string | null;
+  tiktokUrl: string | null;
+  dbsCertificateNumber: string | null;
+  dbsCertificateExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -61,6 +61,15 @@ below) is complete end-to-end for that core loop:
   Stripe-billed credit packs) or `PROVIDER` (informational business
   tiers, no billing yet — see the relevant log entry). Admin has full
   CRUD over both from `/admin/plans`.
+- **Child safety data & provider trust signals** — children have an
+  optional allergy/medical note, visible only to the provider running a
+  session that child is booked into (roster + pending-approval lists),
+  never in any public or cross-provider view. Providers can self-report a
+  DBS certificate number/expiry (reviewed by admin, not a live registry
+  check) and social media links (Instagram/Facebook/TikTok, shown on
+  their public activity pages). Activities can be marked SEND-friendly
+  (provider-declared, filterable in Browse). See the relevant log entry
+  for the compliance caveats on each of these.
 
 **Explicitly not done** — flagged in detail in the relevant log entries,
 summarized here: no live Stripe verification was performed (all Stripe
@@ -938,3 +947,75 @@ sees the six platform-wide sections and nothing else); admin hitting
 page, not the page itself; `/admin/plans` full CRUD cycle (create a
 provider tier → edit its name → deactivate → delete) exercised
 end-to-end in a real browser, not just unit-tested.
+
+### 2026-07-23 — Trust & Safety Phase 1: Allergy Info, DBS, Social Links, SEND Tagging
+
+First phase of a client-discussion roadmap covering ten potential
+features (social marketing, AI suggestions, invoicing, allergy info, SEND
+accessibility, provider DBS checks, an AI chat navigator, a kids
+leaderboard, charity, and schools-as-a-role). Phase 1 is the contained,
+no-external-dependency slice: four small additive schema fields with no
+Stripe/LLM/registry integration needed. Later phases (AI, money, schools)
+are intentionally deferred — see the roadmap note below.
+
+**Built:**
+- `Child.allergyInfo` (free text, nullable) — settable by the parent at
+  creation or via a new `PATCH /children/:id`. **Only ever exposed to the
+  specific provider running a session that child is booked into** (the
+  roster/`attendees` endpoint and the pending-approval list), never in
+  any parent-facing list to other parents or any cross-provider view —
+  this is special-category health data under UK GDPR, so the exposure
+  surface was scoped deliberately narrow, not just "add a field and show
+  it everywhere." Rendered as a highlighted `⚠` safety note (new
+  `.safety-note` class) on `Roster.tsx` and the pending-approval list on
+  `ProviderDashboard.tsx`, not buried in fine print.
+- `User.dbsCertificateNumber` / `dbsCertificateExpiresAt` — self-reported
+  by the provider (`ProviderDashboard`'s new "Safeguarding" section),
+  surfaced to admin on `PendingProviders.tsx` with an expired/missing
+  warning (also using `.safety-note`) so it factors into the approve
+  decision. **This is not a live DBS registry check** — real-time
+  verification needs official umbrella-body registration, not just an
+  API key (same class of blocker as Stripe/WhatsApp elsewhere in this
+  project). Approval isn't hard-blocked on missing/expired DBS — that's a
+  policy call for the client to make explicitly, not something to assume.
+- `User.instagramUrl` / `facebookUrl` / `tiktokUrl` — plain URL fields
+  (provider-editable, new "Social media" section on `ProviderDashboard`),
+  shown as buttons on `ActivityBrowseDetail` alongside the existing
+  WhatsApp button. Not a real social API integration (posting/reading
+  needs per-platform developer credentials) — just outbound links, same
+  seam pattern as WhatsApp's `wa.me` deep link.
+- `Activity.isSendFriendly` — provider-declared checkbox on
+  `ActivityForm` (creation only; there's no general activity-edit UI yet
+  for any field, not just this one), a `sendFriendly=true` filter on
+  `GET /activities`, a checkbox filter on `Browse.tsx`, and a badge on
+  both the browse list and the activity detail page. Self-reported, not
+  independently verified — a filter/badge, not a certification.
+
+**Roadmap note:** the remaining nine items from the client discussion are
+sequenced as: Phase 2 (AI analytics suggestions + an AI chat navigator —
+needs an LLM API key), Phase 3 (invoicing/receipts + charity — charity
+needs a concrete model defined first, e.g. donate-a-credit vs. partner
+showcase vs. subsidized places), Phase 4 (kids leaderboard — needs a
+safeguarding-conscious design, no public full names of minors), Phase 5
+(schools as a third role alongside parents/providers — the biggest,
+most standalone piece, saved for last).
+
+**Environment note, not a code issue:** mid-session, the local dev
+Postgres database was found completely empty (`User`, `Plan`, `AgeGroup`
+all 0 rows) despite nothing in this session's commands (or any test)
+issuing a delete — consistent with the migration-tracking oddity flagged
+in the previous log entry (no `_prisma_migrations` table). Recovered via
+`prisma db seed` + re-inserting the 3 parent credit plans by hand (same
+recovery as before). Whoever deploys this for real should not rely on
+this dev database's state persisting between sessions, and should
+properly baseline migration history first.
+
+**Verified:** 106 backend tests still green, both builds clean. Full
+browser flow: provider sets DBS info and social links (confirmed
+persisted after a reload) → creates a SEND-friendly activity → parent
+filters Browse to SEND-friendly, sees the badge and the provider's
+Instagram/Facebook buttons on the detail page → parent adds a child with
+allergy info → books the activity → provider's pending-approval list
+shows the allergy warning → admin's pending-providers queue shows a
+freshly-registered provider's "No DBS certificate on file" warning. Zero
+console errors throughout.

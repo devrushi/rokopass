@@ -16,6 +16,7 @@ export function ActivityForm() {
   const [location, setLocation] = useState("");
   const [capacity, setCapacity] = useState(10);
   const [creditCost, setCreditCost] = useState(1);
+  const [isSendFriendly, setIsSendFriendly] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -33,7 +34,7 @@ export function ActivityForm() {
     try {
       const data = await apiRequest<{ activity: Activity }>("/activities", {
         method: "POST",
-        body: { title, description, category, ageGroupId, location, capacity, creditCost },
+        body: { title, description, category, ageGroupId, location, capacity, creditCost, isSendFriendly },
       });
       navigate(`/provider/activities/${data.activity.id}`);
     } catch (err) {
@@ -110,6 +111,15 @@ export function ActivityForm() {
             />
           </label>
         </div>
+
+        <label className="form__checkbox">
+          <input
+            type="checkbox"
+            checked={isSendFriendly}
+            onChange={(e) => setIsSendFriendly(e.target.checked)}
+          />
+          SEND-friendly (suitable for children with special educational needs/disabilities)
+        </label>
 
         {error && <p className="form__error">{error}</p>}
 

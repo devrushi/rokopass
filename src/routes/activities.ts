@@ -28,10 +28,13 @@ async function loadOwnedActivity(activityId: string, userId: string, role: strin
 
 activitiesRouter.get("/", async (req, res, next) => {
   try {
+    const sendFriendly = req.query.sendFriendly === "true";
+
     const activities = await prisma.activity.findMany({
       where: {
         isActive: true,
         isFlagged: false,
+        ...(sendFriendly ? { isSendFriendly: true } : {}),
         // Public listing only shows activities from verified providers (or admin-created ones,
         // which have no verificationStatus to check). Providers still see their own pending
         // activities via GET /activities/mine while awaiting approval — this only hides them
@@ -71,7 +74,17 @@ activitiesRouter.get("/:id", async (req, res, next) => {
       include: {
         ageGroup: true,
         media: true,
-        provider: { select: { id: true, firstName: true, lastName: true, whatsappNumber: true } },
+        provider: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            whatsappNumber: true,
+            instagramUrl: true,
+            facebookUrl: true,
+            tiktokUrl: true,
+          },
+        },
       },
     });
     if (!activity) {

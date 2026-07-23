@@ -76,6 +76,23 @@
   color: initial;
 }
 
+.form__checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem !important;
+}
+
+.form__checkbox input {
+  width: auto;
+}
+
+.safety-note {
+  color: var(--danger);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
 .form textarea {
   resize: vertical;
   min-height: 4rem;

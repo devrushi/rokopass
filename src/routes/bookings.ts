@@ -38,7 +38,7 @@ bookingsRouter.get(
           ...(req.user!.role === "ADMIN" ? {} : { session: { activity: { providerId: req.user!.sub } } }),
         },
         include: {
-          child: { select: { id: true, firstName: true, lastName: true } },
+          child: { select: { id: true, firstName: true, lastName: true, allergyInfo: true } },
           parent: { select: { id: true, firstName: true, lastName: true, email: true } },
           session: { include: { activity: { select: { id: true, title: true } } } },
         },

@@ -21,6 +21,19 @@ export function ProviderDashboard() {
   const [whatsappError, setWhatsappError] = useState<string | null>(null);
   const [isSavingWhatsapp, setIsSavingWhatsapp] = useState(false);
 
+  const [instagramUrl, setInstagramUrl] = useState(user?.instagramUrl ?? "");
+  const [facebookUrl, setFacebookUrl] = useState(user?.facebookUrl ?? "");
+  const [tiktokUrl, setTiktokUrl] = useState(user?.tiktokUrl ?? "");
+  const [socialError, setSocialError] = useState<string | null>(null);
+  const [isSavingSocial, setIsSavingSocial] = useState(false);
+
+  const [dbsCertificateNumber, setDbsCertificateNumber] = useState(user?.dbsCertificateNumber ?? "");
+  const [dbsCertificateExpiresAt, setDbsCertificateExpiresAt] = useState(
+    user?.dbsCertificateExpiresAt ? user.dbsCertificateExpiresAt.slice(0, 10) : "",
+  );
+  const [dbsError, setDbsError] = useState<string | null>(null);
+  const [isSavingDbs, setIsSavingDbs] = useState(false);
+
   function loadPending() {
     apiRequest<{ bookings: PendingBooking[] }>("/bookings/pending-approval")
       .then((data) => setPending(data.bookings))
@@ -46,6 +59,17 @@ export function ProviderDashboard() {
     setWhatsappNumber(user?.whatsappNumber ?? "");
   }, [user?.whatsappNumber]);
 
+  useEffect(() => {
+    setInstagramUrl(user?.instagramUrl ?? "");
+    setFacebookUrl(user?.facebookUrl ?? "");
+    setTiktokUrl(user?.tiktokUrl ?? "");
+  }, [user?.instagramUrl, user?.facebookUrl, user?.tiktokUrl]);
+
+  useEffect(() => {
+    setDbsCertificateNumber(user?.dbsCertificateNumber ?? "");
+    setDbsCertificateExpiresAt(user?.dbsCertificateExpiresAt ? user.dbsCertificateExpiresAt.slice(0, 10) : "");
+  }, [user?.dbsCertificateNumber, user?.dbsCertificateExpiresAt]);
+
   async function handleSaveWhatsapp(event: FormEvent) {
     event.preventDefault();
     setWhatsappError(null);
@@ -61,6 +85,54 @@ export function ProviderDashboard() {
       setWhatsappError(err instanceof ApiError ? err.message : "Failed to save WhatsApp number");
     } finally {
       setIsSavingWhatsapp(false);
+    }
+  }
+
+  async function handleSaveSocial(event: FormEvent) {
+    event.preventDefault();
+    setSocialError(null);
+    setIsSavingSocial(true);
+    try {
+      const data = await apiRequest<{ user: UserProfile }>("/auth/me", {
+        method: "PATCH",
+        body: {
+          instagramUrl: instagramUrl.trim() || null,
+          facebookUrl: facebookUrl.trim() || null,
+          tiktokUrl: tiktokUrl.trim() || null,
+        },
+      });
+      setInstagramUrl(data.user.instagramUrl ?? "");
+      setFacebookUrl(data.user.facebookUrl ?? "");
+      setTiktokUrl(data.user.tiktokUrl ?? "");
+      await refreshUser();
+    } catch (err) {
+      setSocialError(err instanceof ApiError ? err.message : "Failed to save social links");
+    } finally {
+      setIsSavingSocial(false);
+    }
+  }
+
+  async function handleSaveDbs(event: FormEvent) {
+    event.preventDefault();
+    setDbsError(null);
+    setIsSavingDbs(true);
+    try {
+      const data = await apiRequest<{ user: UserProfile }>("/auth/me", {
+        method: "PATCH",
+        body: {
+          dbsCertificateNumber: dbsCertificateNumber.trim() || null,
+          dbsCertificateExpiresAt: dbsCertificateExpiresAt || null,
+        },
+      });
+      setDbsCertificateNumber(data.user.dbsCertificateNumber ?? "");
+      setDbsCertificateExpiresAt(
+        data.user.dbsCertificateExpiresAt ? data.user.dbsCertificateExpiresAt.slice(0, 10) : "",
+      );
+      await refreshUser();
+    } catch (err) {
+      setDbsError(err instanceof ApiError ? err.message : "Failed to save DBS details");
+    } finally {
+      setIsSavingDbs(false);
     }
   }
 
@@ -186,6 +258,74 @@ export function ProviderDashboard() {
       </section>
 
       <section>
+        <h2>Social media</h2>
+        <p className="page-status">Shown as links on your public activity pages.</p>
+        <form className="form" onSubmit={handleSaveSocial}>
+          <label>
+            Instagram URL
+            <input
+              type="url"
+              placeholder="https://instagram.com/yourbusiness"
+              value={instagramUrl}
+              onChange={(e) => setInstagramUrl(e.target.value)}
+            />
+          </label>
+          <label>
+            Facebook URL
+            <input
+              type="url"
+              placeholder="https://facebook.com/yourbusiness"
+              value={facebookUrl}
+              onChange={(e) => setFacebookUrl(e.target.value)}
+            />
+          </label>
+          <label>
+            TikTok URL
+            <input
+              type="url"
+              placeholder="https://tiktok.com/@yourbusiness"
+              value={tiktokUrl}
+              onChange={(e) => setTiktokUrl(e.target.value)}
+            />
+          </label>
+          {socialError && <p className="form__error">{socialError}</p>}
+          <button type="submit" className="button" disabled={isSavingSocial}>
+            {isSavingSocial ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Safeguarding (DBS check)</h2>
+        <p className="page-status">
+          Self-reported for now — an admin reviews this before approving your account. This is
+          not a live registry check.
+        </p>
+        <form className="form" onSubmit={handleSaveDbs}>
+          <label>
+            DBS certificate number
+            <input
+              value={dbsCertificateNumber}
+              onChange={(e) => setDbsCertificateNumber(e.target.value)}
+              placeholder="001234567890"
+            />
+          </label>
+          <label>
+            Certificate expiry date
+            <input
+              type="date"
+              value={dbsCertificateExpiresAt}
+              onChange={(e) => setDbsCertificateExpiresAt(e.target.value)}
+            />
+          </label>
+          {dbsError && <p className="form__error">{dbsError}</p>}
+          <button type="submit" className="button" disabled={isSavingDbs}>
+            {isSavingDbs ? "Saving…" : "Save"}
+          </button>
+        </form>
+      </section>
+
+      <section>
         <h2>Bookings awaiting your approval</h2>
         {!pending && <p className="page-status">Loading…</p>}
         {pending && pending.length === 0 && <p className="page-status">Nothing to review right now.</p>}
@@ -202,6 +342,9 @@ export function ProviderDashboard() {
                     {new Date(booking.session.startsAt).toLocaleString()} · parent:{" "}
                     {booking.parent.firstName} {booking.parent.lastName} ({booking.parent.email})
                   </div>
+                  {booking.child.allergyInfo && (
+                    <div className="safety-note">⚠ Allergy/medical info: {booking.child.allergyInfo}</div>
+                  )}
                 </div>
                 <div className="session-row__actions">
                   <button

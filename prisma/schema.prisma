@@ -31,6 +31,17 @@ model User {
   // E.164-ish (e.g. "+441234567890"), used to build a wa.me deep link for parents to message a
   // provider directly — not a real WhatsApp Business API integration, see AGENTS.md.
   whatsappNumber     String?
+  // Provider marketing links, shown on their public activity pages. Plain URLs, not a real
+  // social API integration (posting/reading requires per-platform developer credentials this
+  // project doesn't have) — same class of seam as whatsappNumber above.
+  instagramUrl       String?
+  facebookUrl        String?
+  tiktokUrl          String?
+  // Provider safeguarding record — self-reported by the provider, reviewed by an admin before
+  // approval. Not a live DBS registry check (that requires official umbrella-body registration,
+  // not just an API key); see AGENTS.md for the MVP-vs-real-verification note.
+  dbsCertificateNumber    String?
+  dbsCertificateExpiresAt DateTime?
   createdAt          DateTime                     @default(now())
   updatedAt          DateTime                     @updatedAt
 
@@ -68,6 +79,10 @@ model Activity {
   isActive    Boolean  @default(true)
   isFlagged   Boolean  @default(false)
   isFeatured  Boolean  @default(false)
+  // Provider-declared: this activity is run in a way suitable for children with special
+  // educational needs/disabilities. Self-reported, not independently verified — a filter/badge,
+  // not a certification.
+  isSendFriendly Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -149,6 +164,10 @@ model Child {
   firstName   String
   lastName    String
   dateOfBirth DateTime
+  // Special-category health data (UK GDPR) — free text set by the parent, only ever exposed to
+  // the specific provider running a session this child is booked into (via the roster/attendees
+  // endpoint), never in any public or cross-provider listing. See AGENTS.md.
+  allergyInfo String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

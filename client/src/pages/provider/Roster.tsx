@@ -65,6 +65,9 @@ export function Roster() {
                   Parent: {booking.parent.firstName} {booking.parent.lastName} ({booking.parent.email}) ·{" "}
                   {booking.status}
                 </div>
+                {booking.child.allergyInfo && (
+                  <div className="safety-note">⚠ Allergy/medical info: {booking.child.allergyInfo}</div>
+                )}
               </div>
               {booking.status === "PENDING_APPROVAL" && (
                 <div className="session-row__actions">

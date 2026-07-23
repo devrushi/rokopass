@@ -26,6 +26,7 @@ export interface Activity {
   isActive: boolean;
   isFlagged: boolean;
   isFeatured: boolean;
+  isSendFriendly: boolean;
   ageGroup: AgeGroup;
   media: ActivityMedia[];
   createdAt: string;
@@ -38,6 +39,9 @@ export interface ActivityWithProviderContact extends Activity {
     firstName: string;
     lastName: string;
     whatsappNumber: string | null;
+    instagramUrl: string | null;
+    facebookUrl: string | null;
+    tiktokUrl: string | null;
   };
 }
 
@@ -72,6 +76,7 @@ export interface Child {
   firstName: string;
   lastName: string;
   dateOfBirth: string;
+  allergyInfo: string | null;
 }
 
 export type BookingStatus =
@@ -99,7 +104,7 @@ export interface Booking {
 export interface AttendeeBooking {
   id: string;
   status: BookingStatus;
-  child: { id: string; firstName: string; lastName: string };
+  child: { id: string; firstName: string; lastName: string; allergyInfo: string | null };
   parent: { id: string; firstName: string; lastName: string; email: string };
 }
 
@@ -108,7 +113,7 @@ export interface PendingBooking {
   status: BookingStatus;
   creditsSpent: number;
   createdAt: string;
-  child: { id: string; firstName: string; lastName: string };
+  child: { id: string; firstName: string; lastName: string; allergyInfo: string | null };
   parent: { id: string; firstName: string; lastName: string; email: string };
   session: {
     id: string;
@@ -125,6 +130,8 @@ export interface AdminProvider {
   firstName: string;
   lastName: string;
   verificationStatus: ProviderVerificationStatus;
+  dbsCertificateNumber: string | null;
+  dbsCertificateExpiresAt: string | null;
   createdAt: string;
 }
 

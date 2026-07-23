@@ -21,11 +21,22 @@ export const refreshSchema = z.object({
   refreshToken: z.string().min(1, "refreshToken is required"),
 });
 
-export const updateProfileSchema = z.object({
-  // Loose E.164-ish check (leading +, 8-15 digits) — good enough to catch typos without being a
-  // full phone-number validation library. Used to build a wa.me deep link, not for SMS/calling.
-  whatsappNumber: z
-    .string()
-    .regex(/^\+[1-9]\d{7,14}$/, "Must be in international format, e.g. +441234567890")
-    .nullable(),
-});
+const urlField = z.string().url("Must be a valid URL").nullable().optional();
+
+export const updateProfileSchema = z
+  .object({
+    // Loose E.164-ish check (leading +, 8-15 digits) — good enough to catch typos without being
+    // a full phone-number validation library. Used to build a wa.me deep link, not for
+    // SMS/calling.
+    whatsappNumber: z
+      .string()
+      .regex(/^\+[1-9]\d{7,14}$/, "Must be in international format, e.g. +441234567890")
+      .nullable()
+      .optional(),
+    instagramUrl: urlField,
+    facebookUrl: urlField,
+    tiktokUrl: urlField,
+    dbsCertificateNumber: z.string().min(1).max(100).nullable().optional(),
+    dbsCertificateExpiresAt: z.coerce.date().nullable().optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, { message: "No fields to update" });

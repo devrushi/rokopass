@@ -6,17 +6,28 @@ import "../provider/provider.css";
 
 export function Browse() {
   const [activities, setActivities] = useState<Activity[] | null>(null);
+  const [sendFriendlyOnly, setSendFriendlyOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiRequest<{ activities: Activity[] }>("/activities", { skipAuth: true })
+    const query = sendFriendlyOnly ? "?sendFriendly=true" : "";
+    apiRequest<{ activities: Activity[] }>(`/activities${query}`, { skipAuth: true })
       .then((data) => setActivities(data.activities))
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load activities"));
-  }, []);
+  }, [sendFriendlyOnly]);
 
   return (
     <div className="provider-page">
       <h1>Browse activities</h1>
+
+      <label className="form__checkbox">
+        <input
+          type="checkbox"
+          checked={sendFriendlyOnly}
+          onChange={(e) => setSendFriendlyOnly(e.target.checked)}
+        />
+        SEND-friendly only
+      </label>
 
       {error && <p className="form__error">{error}</p>}
       {!activities && !error && <p className="page-status">Loading…</p>}
@@ -39,7 +50,10 @@ export function Browse() {
                     />
                   )}
                   <div>
-                    <strong>{activity.title}</strong>
+                    <strong>
+                      {activity.title}
+                      {activity.isSendFriendly && " · SEND-friendly"}
+                    </strong>
                     <div className="activity-card__meta">
                       {activity.category} · {activity.ageGroup.label} · {activity.location}
                     </div>

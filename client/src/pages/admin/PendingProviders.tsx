@@ -65,6 +65,25 @@ export function PendingProviders() {
                 <div className="activity-card__meta">
                   {provider.email} · applied {new Date(provider.createdAt).toLocaleDateString()}
                 </div>
+                {provider.dbsCertificateNumber ? (
+                  <div
+                    className={
+                      provider.dbsCertificateExpiresAt &&
+                      new Date(provider.dbsCertificateExpiresAt) < new Date()
+                        ? "safety-note"
+                        : "activity-card__meta"
+                    }
+                  >
+                    DBS: {provider.dbsCertificateNumber}
+                    {provider.dbsCertificateExpiresAt &&
+                      ` · expires ${new Date(provider.dbsCertificateExpiresAt).toLocaleDateString()}`}
+                    {provider.dbsCertificateExpiresAt &&
+                      new Date(provider.dbsCertificateExpiresAt) < new Date() &&
+                      " (EXPIRED)"}
+                  </div>
+                ) : (
+                  <div className="safety-note">⚠ No DBS certificate on file</div>
+                )}
               </div>
               <div className="session-row__actions">
                 <input

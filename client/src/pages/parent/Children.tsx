@@ -8,8 +8,14 @@ export function Children() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [allergyInfo, setAllergyInfo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editAllergyInfo, setEditAllergyInfo] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   function load() {
     apiRequest<{ children: Child[] }>("/children/mine")
@@ -24,15 +30,43 @@ export function Children() {
     setError(null);
     setIsSubmitting(true);
     try {
-      await apiRequest("/children", { method: "POST", body: { firstName, lastName, dateOfBirth } });
+      await apiRequest("/children", {
+        method: "POST",
+        body: { firstName, lastName, dateOfBirth, allergyInfo: allergyInfo.trim() || null },
+      });
       setFirstName("");
       setLastName("");
       setDateOfBirth("");
+      setAllergyInfo("");
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to add child");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  function startEdit(child: Child) {
+    setEditingId(child.id);
+    setEditAllergyInfo(child.allergyInfo ?? "");
+    setEditError(null);
+  }
+
+  async function handleSaveAllergyInfo(event: FormEvent, childId: string) {
+    event.preventDefault();
+    setEditError(null);
+    setIsSaving(true);
+    try {
+      await apiRequest(`/children/${childId}`, {
+        method: "PATCH",
+        body: { allergyInfo: editAllergyInfo.trim() || null },
+      });
+      setEditingId(null);
+      load();
+    } catch (err) {
+      setEditError(err instanceof ApiError ? err.message : "Failed to save allergy info");
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -42,18 +76,55 @@ export function Children() {
 
       {children && children.length > 0 && (
         <ul className="activity-list">
-          {children.map((child) => (
-            <li key={child.id} className="activity-card">
-              <div>
-                <strong>
-                  {child.firstName} {child.lastName}
-                </strong>
-                <div className="activity-card__meta">
-                  Born {new Date(child.dateOfBirth).toLocaleDateString()}
+          {children.map((child) =>
+            editingId === child.id ? (
+              <li key={child.id} className="activity-card" style={{ flexDirection: "column", alignItems: "stretch" }}>
+                <form className="form" onSubmit={(e) => handleSaveAllergyInfo(e, child.id)}>
+                  <strong>
+                    {child.firstName} {child.lastName}
+                  </strong>
+                  <label>
+                    Allergy / medical info (only shared with the provider running a booked session)
+                    <textarea
+                      value={editAllergyInfo}
+                      onChange={(e) => setEditAllergyInfo(e.target.value)}
+                      placeholder="e.g. Peanut allergy — carries an EpiPen"
+                      maxLength={2000}
+                    />
+                  </label>
+                  {editError && <p className="form__error">{editError}</p>}
+                  <div className="session-row__actions">
+                    <button type="submit" className="button" disabled={isSaving}>
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      onClick={() => setEditingId(null)}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </li>
+            ) : (
+              <li key={child.id} className="activity-card">
+                <div>
+                  <strong>
+                    {child.firstName} {child.lastName}
+                  </strong>
+                  <div className="activity-card__meta">
+                    Born {new Date(child.dateOfBirth).toLocaleDateString()}
+                    {child.allergyInfo && " · has allergy/medical info on file"}
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
+                <button type="button" className="button button--secondary" onClick={() => startEdit(child)}>
+                  {child.allergyInfo ? "Edit allergy info" : "Add allergy info"}
+                </button>
+              </li>
+            ),
+          )}
         </ul>
       )}
       {children && children.length === 0 && <p className="page-status">No children added yet.</p>}
@@ -78,6 +149,16 @@ export function Children() {
               value={dateOfBirth}
               onChange={(e) => setDateOfBirth(e.target.value)}
               required
+            />
+          </label>
+          <label>
+            Allergy / medical info (optional — only shared with the provider running a booked
+            session)
+            <textarea
+              value={allergyInfo}
+              onChange={(e) => setAllergyInfo(e.target.value)}
+              placeholder="e.g. Peanut allergy — carries an EpiPen"
+              maxLength={2000}
             />
           </label>
 
