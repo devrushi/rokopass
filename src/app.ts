@@ -15,6 +15,7 @@ import { billingRouter } from "./routes/billing";
 import { bookingsRouter } from "./routes/bookings";
 import { childrenRouter } from "./routes/children";
 import { healthRouter } from "./routes/health";
+import { leaderboardRouter } from "./routes/leaderboard";
 import { sessionsRouter } from "./routes/sessions";
 import { webhooksRouter } from "./routes/webhooks";
 
@@ -56,6 +57,7 @@ export function createApp() {
   app.use("/admin", adminRouter);
   app.use("/analytics", analyticsRouter);
   app.use("/ai", aiRouter);
+  app.use("/leaderboard", leaderboardRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

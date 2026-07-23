@@ -102,6 +102,12 @@ export interface Child {
   lastName: string;
   dateOfBirth: string;
   allergyInfo: string | null;
+  isOnLeaderboard: boolean;
+}
+
+export interface LeaderboardEntry {
+  displayName: string;
+  attendedCount: number;
 }
 
 export type BookingStatus =

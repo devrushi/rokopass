@@ -168,6 +168,9 @@ model Child {
   // the specific provider running a session this child is booked into (via the roster/attendees
   // endpoint), never in any public or cross-provider listing. See AGENTS.md.
   allergyInfo String?
+  // Opt-in, default false — a child only appears on the leaderboard if a parent explicitly
+  // turns this on, and even then only as "Firstname L." (see src/services/leaderboard.ts).
+  isOnLeaderboard Boolean @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

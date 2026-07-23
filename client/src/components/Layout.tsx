@@ -35,6 +35,9 @@ export function Layout() {
               >
                 Dashboard
               </Link>
+              <Link to="/leaderboard" onClick={() => setNavOpen(false)}>
+                Leaderboard
+              </Link>
               {user.role === "PARENT" && (
                 <>
                   <Link to="/plans" onClick={() => setNavOpen(false)}>

@@ -14,6 +14,7 @@ import { BillingReturn } from "./pages/BillingReturn";
 import { Chat } from "./pages/Chat";
 import { Checkout } from "./pages/Checkout";
 import { Dashboard } from "./pages/Dashboard";
+import { Leaderboard } from "./pages/Leaderboard";
 import { Login } from "./pages/Login";
 import { ActivityBrowseDetail } from "./pages/parent/ActivityBrowseDetail";
 import { Browse } from "./pages/parent/Browse";
@@ -144,6 +145,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={["PARENT"]}>
               <Invoices />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/leaderboard"
+          element={
+            <ProtectedRoute>
+              <Leaderboard />
             </ProtectedRoute>
           }
         />

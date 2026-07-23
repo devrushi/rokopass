@@ -5,6 +5,7 @@ export const createChildSchema = z.object({
   lastName: z.string().min(1, "Last name is required"),
   dateOfBirth: z.coerce.date(),
   allergyInfo: z.string().max(2000).nullable().optional(),
+  isOnLeaderboard: z.boolean().optional(),
 });
 
 export const updateChildSchema = createChildSchema

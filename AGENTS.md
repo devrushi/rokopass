@@ -82,6 +82,9 @@ below) is complete end-to-end for that core loop:
   admins redistribute those credits to families in need
   (`/admin/charity`) — deliberately not a real-money donation flow, to
   avoid new payment/regulatory surface area.
+- **Kids leaderboard** (`/leaderboard`) — opt-in per child (default off),
+  ranked by attendance, shown as first-name + last-initial only. Never
+  public/unauthenticated.
 
 **Explicitly not done** — flagged in detail in the relevant log entries,
 summarized here: no live Stripe verification was performed (all Stripe
@@ -1154,3 +1157,39 @@ admin's `/admin/charity` page shows that donation in the recent-activity
 list and successfully grants 1 credit back to the same parent by email,
 with the pool balance and audit log both reflecting it. Zero console
 errors throughout.
+
+### 2026-07-23 — Phase 4: Kids Leaderboard
+
+Fourth phase of the client roadmap. The one item on the list where the
+"safeguarding-conscious design" instruction wasn't optional — a public
+ranked list of children by full name is a real risk, not a style choice,
+so the design decisions below aren't defaults, they're the point of this
+feature.
+
+**Built:**
+- `Child.isOnLeaderboard` — **opt-in, defaults false.** A child never
+  appears just because they exist; a parent has to explicitly turn it on
+  per-child (new toggle button on `Children.tsx`, `PATCH /children/:id`
+  same as the existing allergy-info edit).
+- `GET /leaderboard` (`src/services/leaderboard.ts`) — ranked by
+  **attendance count**, not credits spent or money paid, so the feature
+  rewards showing up rather than incentivizing a family to spend more to
+  rank higher. Display name is **first name + last-initial only**
+  (`"Emma S."`) — the child's id, parent, and full last name never leave
+  the service function. Children with zero attended bookings are
+  filtered out entirely (an opted-in-but-never-attended child doesn't
+  need to appear on a "top attendees" list). **Authenticated, not
+  public** — any logged-in role can view it, but it's not reachable
+  without an account, cutting down on casual scraping of even the
+  pseudonymized data.
+- Frontend: the opt-in toggle on `Children.tsx`, and a new `/leaderboard`
+  page + nav link visible to all three roles.
+
+**Verified:** 130 backend tests green (4 new — including an assertion
+that the full last names used in the test fixtures never appear anywhere
+in the API response JSON, not just that the *expected* names are
+correctly formatted). Both builds clean. Real browser pass: added a
+child, opted them in, confirmed the "on the leaderboard" note appears,
+confirmed the leaderboard page correctly shows "no one yet" (zero
+attendance filtered out, not a bug) and that the child's full last name
+never appears on the page. Zero console errors.

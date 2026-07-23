@@ -16,6 +16,7 @@ export function Children() {
   const [editAllergyInfo, setEditAllergyInfo] = useState("");
   const [editError, setEditError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [togglingLeaderboardId, setTogglingLeaderboardId] = useState<string | null>(null);
 
   function load() {
     apiRequest<{ children: Child[] }>("/children/mine")
@@ -70,6 +71,22 @@ export function Children() {
     }
   }
 
+  async function toggleLeaderboard(child: Child) {
+    setTogglingLeaderboardId(child.id);
+    setError(null);
+    try {
+      await apiRequest(`/children/${child.id}`, {
+        method: "PATCH",
+        body: { isOnLeaderboard: !child.isOnLeaderboard },
+      });
+      load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to update leaderboard setting");
+    } finally {
+      setTogglingLeaderboardId(null);
+    }
+  }
+
   return (
     <div className="provider-page">
       <h1>My children</h1>
@@ -117,11 +134,22 @@ export function Children() {
                   <div className="activity-card__meta">
                     Born {new Date(child.dateOfBirth).toLocaleDateString()}
                     {child.allergyInfo && " · has allergy/medical info on file"}
+                    {child.isOnLeaderboard && " · on the leaderboard"}
                   </div>
                 </div>
-                <button type="button" className="button button--secondary" onClick={() => startEdit(child)}>
-                  {child.allergyInfo ? "Edit allergy info" : "Add allergy info"}
-                </button>
+                <div className="session-row__actions">
+                  <button
+                    type="button"
+                    className="button button--secondary"
+                    disabled={togglingLeaderboardId === child.id}
+                    onClick={() => toggleLeaderboard(child)}
+                  >
+                    {child.isOnLeaderboard ? "Remove from leaderboard" : "Add to leaderboard"}
+                  </button>
+                  <button type="button" className="button button--secondary" onClick={() => startEdit(child)}>
+                    {child.allergyInfo ? "Edit allergy info" : "Add allergy info"}
+                  </button>
+                </div>
               </li>
             ),
           )}
