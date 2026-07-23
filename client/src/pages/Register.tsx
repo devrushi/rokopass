@@ -11,7 +11,7 @@ export function Register() {
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"PARENT" | "PROVIDER">("PARENT");
+  const [role, setRole] = useState<"PARENT" | "PROVIDER" | "SCHOOL">("PARENT");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -68,9 +68,10 @@ export function Register() {
 
       <label>
         I am registering as a
-        <select value={role} onChange={(e) => setRole(e.target.value as "PARENT" | "PROVIDER")}>
+        <select value={role} onChange={(e) => setRole(e.target.value as "PARENT" | "PROVIDER" | "SCHOOL")}>
           <option value="PARENT">Parent looking for activities</option>
           <option value="PROVIDER">Activity provider</option>
+          <option value="SCHOOL">School looking for activity providers</option>
         </select>
       </label>
 

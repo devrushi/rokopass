@@ -22,5 +22,9 @@ export function HomeRedirect() {
     return <Navigate to="/admin" replace />;
   }
 
+  if (user.role === "SCHOOL") {
+    return <Navigate to="/school" replace />;
+  }
+
   return <Navigate to="/dashboard" replace />;
 }

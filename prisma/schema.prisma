@@ -11,8 +11,12 @@ enum UserRole {
   PARENT
   PROVIDER
   ADMIN
+  // A school looking for vetted activity providers to work with — see SchoolProviderApproval.
+  SCHOOL
 }
 
+// Name predates the SCHOOL role but the states apply identically — both PROVIDER and SCHOOL
+// accounts start PENDING and need admin approval before full access, so this wasn't renamed.
 enum ProviderVerificationStatus {
   PENDING
   APPROVED
@@ -51,6 +55,35 @@ model User {
   children           Child[]
   bookings           Booking[]
   auditLogs          AuditLog[]
+
+  schoolApprovalsGiven    SchoolProviderApproval[] @relation("SchoolApprovalsGiven")
+  schoolApprovalsReceived SchoolProviderApproval[] @relation("SchoolApprovalsReceived")
+}
+
+enum SchoolApprovalStatus {
+  SHORTLISTED
+  APPROVED
+  REJECTED
+}
+
+// A school's own vetting decision about a provider — separate from the platform's own
+// PROVIDER verificationStatus. A school sees the provider's RokidsPass verification/DBS status
+// as a starting signal (reduces the school's own admin burden of vetting from scratch) and
+// records its own decision here, scoped per school so different schools can reach different
+// conclusions about the same provider.
+model SchoolProviderApproval {
+  id         String               @id @default(uuid())
+  schoolId   String
+  school     User                 @relation("SchoolApprovalsGiven", fields: [schoolId], references: [id])
+  providerId String
+  provider   User                 @relation("SchoolApprovalsReceived", fields: [providerId], references: [id])
+  status     SchoolApprovalStatus
+  notes      String?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+
+  @@unique([schoolId, providerId])
+  @@index([providerId])
 }
 
 model AgeGroup {

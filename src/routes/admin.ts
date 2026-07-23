@@ -57,9 +57,10 @@ adminRouter.get("/providers", async (req, res, next) => {
     if (!["PENDING", "APPROVED", "REJECTED"].includes(status)) {
       throw new AppError("Invalid status filter", 400);
     }
+    const role = req.query.role === "SCHOOL" ? "SCHOOL" : "PROVIDER";
 
     const providers = await prisma.user.findMany({
-      where: { role: "PROVIDER", verificationStatus: status as "PENDING" | "APPROVED" | "REJECTED" },
+      where: { role, verificationStatus: status as "PENDING" | "APPROVED" | "REJECTED" },
       orderBy: { createdAt: "asc" },
     });
 
@@ -72,7 +73,7 @@ adminRouter.get("/providers", async (req, res, next) => {
 adminRouter.post("/providers/:id/approve", async (req, res, next) => {
   try {
     const provider = await prisma.user.findUnique({ where: { id: param(req.params.id) } });
-    if (!provider || provider.role !== "PROVIDER") {
+    if (!provider || (provider.role !== "PROVIDER" && provider.role !== "SCHOOL")) {
       throw new AppError("Provider not found", 404);
     }
 
@@ -97,7 +98,7 @@ adminRouter.post("/providers/:id/approve", async (req, res, next) => {
 adminRouter.post("/providers/:id/reject", async (req, res, next) => {
   try {
     const provider = await prisma.user.findUnique({ where: { id: param(req.params.id) } });
-    if (!provider || provider.role !== "PROVIDER") {
+    if (!provider || (provider.role !== "PROVIDER" && provider.role !== "SCHOOL")) {
       throw new AppError("Provider not found", 404);
     }
 

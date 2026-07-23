@@ -37,7 +37,7 @@ authRouter.post("/register", async (req, res, next) => {
         firstName,
         lastName,
         role,
-        verificationStatus: role === "PROVIDER" ? "PENDING" : null,
+        verificationStatus: role === "PROVIDER" || role === "SCHOOL" ? "PENDING" : null,
       },
     });
 

@@ -155,6 +155,22 @@ export interface PendingBooking {
 
 export type ProviderVerificationStatus = "PENDING" | "APPROVED" | "REJECTED";
 
+export type SchoolApprovalStatus = "SHORTLISTED" | "APPROVED" | "REJECTED";
+
+export interface SchoolProviderListing {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  whatsappNumber: string | null;
+  dbsCertificateNumber: string | null;
+  dbsCertificateExpiresAt: string | null;
+  categories: string[];
+  activeActivitiesCount: number;
+  schoolStatus: SchoolApprovalStatus | null;
+  schoolNotes: string | null;
+}
+
 export interface AdminProvider {
   id: string;
   email: string;

@@ -11,9 +11,12 @@ entries short (a few bullets) — don't let it grow unbounded.
 ## Project Status
 
 RokidsPass connects **parents** booking extracurricular classes for their
-children with **providers** who run those classes, with **admins**
-moderating both. The initial build (Steps 1–6, all in this file's log
-below) is complete end-to-end for that core loop:
+children with **providers** who run those classes, **schools** looking
+for vetted providers, and **admins** moderating all three. The initial
+build (Steps 1–6, all in this file's log below) is complete end-to-end
+for the core parent/provider/admin loop; a five-phase post-launch
+roadmap (client-requested — social/AI/money/safety/schools) closed out
+everything through the log's final entry:
 
 - **Auth & roles** — JWT access/refresh tokens, three roles (`PARENT`,
   `PROVIDER`, `ADMIN`). Anyone can self-register as parent or provider;
@@ -85,6 +88,12 @@ below) is complete end-to-end for that core loop:
 - **Kids leaderboard** (`/leaderboard`) — opt-in per child (default off),
   ranked by attendance, shown as first-name + last-initial only. Never
   public/unauthenticated.
+- **Schools** — a fourth role (`/school`), registered and admin-approved
+  the same way providers are. Browses only platform-verified providers,
+  sees their DBS status, and records its own independent
+  shortlist/approve/reject decision per provider
+  (`SchoolProviderApproval`) — reduces the school's own vetting work
+  without bypassing RokidsPass's own verification.
 
 **Explicitly not done** — flagged in detail in the relevant log entries,
 summarized here: no live Stripe verification was performed (all Stripe
@@ -1193,3 +1202,77 @@ child, opted them in, confirmed the "on the leaderboard" note appears,
 confirmed the leaderboard page correctly shows "no one yet" (zero
 attendance filtered out, not a bug) and that the child's full last name
 never appears on the page. Zero console errors.
+
+### 2026-07-23 — Phase 5: Schools as a Third Role
+
+Final phase of the client roadmap — the biggest, most standalone piece,
+done last so the patterns (role-scoped nav/routes, admin verification
+workflow, safety-conscious data exposure) were already proven elsewhere
+in the app rather than invented fresh here.
+
+**Built:**
+- **`SCHOOL` added to `UserRole`.** Schools register through the same
+  `POST /auth/register` as parents/providers (role picker on `Register`
+  gained a third option) and go through the **exact same PENDING →
+  admin-approved workflow providers already use** — reusing
+  `verificationStatus` rather than inventing a second approval system.
+  The enum backing it is still named `ProviderVerificationStatus` (predates
+  schools); left as-is rather than a rename that would touch every file
+  referencing it for a naming-purity concern only.
+- **`SchoolProviderApproval`** (new model) — a school's *own* vetting
+  decision about a provider (`SHORTLISTED`/`APPROVED`/`REJECTED` +
+  notes), scoped per school (`@@unique([schoolId, providerId])`) and
+  entirely separate from the platform's own provider verification. This
+  is the "reduce admin for school" part of the ask: a school sees the
+  provider's RokidsPass verification status and DBS record as a
+  starting signal instead of vetting from zero, then records its own
+  call on top of that — two different schools can reach two different
+  conclusions about the same provider.
+- `GET /schools/providers` (new `src/routes/schools.ts`, role-gated to
+  `SCHOOL`/`ADMIN`) — a directory of only platform-**approved**
+  providers, each annotated with distinct activity categories, active
+  activity count, DBS status (with an expired-certificate warning, same
+  pattern as the admin pending-providers view), and *this* school's own
+  `schoolStatus` for that provider (`null` until the school acts).
+  `PUT /schools/providers/:id/approval` upserts the school's decision.
+- Admin's existing `GET /admin/providers` and the approve/reject
+  endpoints now accept schools too (`?role=SCHOOL`, and the ownership
+  check loosened from `role !== "PROVIDER"` to accepting either role).
+  `PendingProviders.tsx` reads `?role=` from the URL to switch between a
+  "Providers" and "Schools" queue — one page, two tabs via a nav link
+  each, rather than a duplicated page.
+- Frontend: new `/school` dashboard (the provider directory + approval
+  UI above), wired into `HomeRedirect` and the nav exactly like the
+  other three roles — a school's nav is deliberately minimal (Dashboard,
+  Leaderboard), no "my stuff" clutter, consistent with the admin
+  nav-restructuring principle from an earlier phase.
+
+**Test-infrastructure note — read this before adding more parallel test
+files that create users:** the pre-existing admin-analytics delta test
+(flagged as fragile in two earlier log entries) finally broke down
+completely once this phase's `tests/schools.test.ts` added yet more
+concurrent `PROVIDER`/`SCHOOL`-creating tests — exact-equality-against-a-
+second-live-query failed on nearly every run, not just occasionally. Root
+cause: with 18 test files now creating users/activities over ~35-45s of
+real wall-clock, *no* comparison against a second global-count query
+(before/after delta, or a same-moment direct query) survives, because
+another file's write can land in the gap between any two round-trips,
+however small. **Fixed by switching to floor assertions
+(`toBeGreaterThanOrEqual`) against values only this test's own fixture
+guarantees** — nothing in the suite ever unflags/unfeatures another
+test's activity or deletes another test's user, so the floor this test
+contributes can only be met or exceeded, never missed. This is the
+correct pattern for testing *any* global/platform-wide aggregate in this
+codebase going forward — never assert exact equality on a shared count
+under this suite's parallelism, always assert a floor from your own
+fixture.
+
+**Verified:** 135 backend tests green (7 new), both builds clean, and
+the delta-test fix confirmed stable across 10 consecutive full-suite
+runs (previously failing on most runs). Full browser flow: registered a
+new school through the real `/register` form → landed on `/school` →
+admin's `?role=SCHOOL` queue showed it pending → admin approved it →
+logged back in as that school → the provider directory listed the seeded
+demo provider (correctly flagging "No DBS certificate on file") →
+approved that provider, which immediately showed "Approved for our
+school" on reload. Zero console errors across every step.

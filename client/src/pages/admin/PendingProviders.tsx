@@ -1,21 +1,26 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiRequest, ApiError } from "../../lib/apiClient";
 import type { AdminProvider } from "../../lib/types";
 import "../provider/provider.css";
 
 export function PendingProviders() {
+  const [searchParams] = useSearchParams();
+  const role = searchParams.get("role") === "SCHOOL" ? "SCHOOL" : "PROVIDER";
+
   const [providers, setProviders] = useState<AdminProvider[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reasonById, setReasonById] = useState<Record<string, string>>({});
 
   function load() {
-    apiRequest<{ providers: AdminProvider[] }>("/admin/providers?status=PENDING")
+    setProviders(null);
+    apiRequest<{ providers: AdminProvider[] }>(`/admin/providers?status=PENDING&role=${role}`)
       .then((data) => setProviders(data.providers))
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load providers"));
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load"));
   }
 
-  useEffect(load, []);
+  useEffect(load, [role]);
 
   async function approve(id: string) {
     setBusyId(id);
@@ -24,7 +29,7 @@ export function PendingProviders() {
       await apiRequest(`/admin/providers/${id}/approve`, { method: "POST" });
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to approve provider");
+      setError(err instanceof ApiError ? err.message : "Failed to approve");
     } finally {
       setBusyId(null);
     }
@@ -40,19 +45,21 @@ export function PendingProviders() {
       });
       load();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to reject provider");
+      setError(err instanceof ApiError ? err.message : "Failed to reject");
     } finally {
       setBusyId(null);
     }
   }
 
+  const label = role === "SCHOOL" ? "schools" : "providers";
+
   return (
     <div className="provider-page">
-      <h1>Pending providers</h1>
+      <h1>Pending {label}</h1>
 
       {error && <p className="form__error">{error}</p>}
       {!providers && !error && <p className="page-status">Loading…</p>}
-      {providers && providers.length === 0 && <p className="page-status">No pending providers.</p>}
+      {providers && providers.length === 0 && <p className="page-status">No pending {label}.</p>}
 
       {providers && providers.length > 0 && (
         <ul className="activity-list">

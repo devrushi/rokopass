@@ -30,7 +30,15 @@ export function Layout() {
           {user ? (
             <>
               <Link
-                to={user.role === "PROVIDER" ? "/provider" : user.role === "ADMIN" ? "/admin" : "/dashboard"}
+                to={
+                  user.role === "PROVIDER"
+                    ? "/provider"
+                    : user.role === "ADMIN"
+                      ? "/admin"
+                      : user.role === "SCHOOL"
+                        ? "/school"
+                        : "/dashboard"
+                }
                 onClick={() => setNavOpen(false)}
               >
                 Dashboard
@@ -83,6 +91,9 @@ export function Layout() {
                   </Link>
                   <Link to="/admin/providers" onClick={() => setNavOpen(false)}>
                     Providers
+                  </Link>
+                  <Link to="/admin/providers?role=SCHOOL" onClick={() => setNavOpen(false)}>
+                    Schools
                   </Link>
                   <Link to="/admin/plans" onClick={() => setNavOpen(false)}>
                     Plans

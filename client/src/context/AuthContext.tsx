@@ -33,7 +33,7 @@ interface AuthContextValue {
     password: string;
     firstName: string;
     lastName: string;
-    role?: "PARENT" | "PROVIDER";
+    role?: "PARENT" | "PROVIDER" | "SCHOOL";
   }) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string;
     firstName: string;
     lastName: string;
-    role?: "PARENT" | "PROVIDER";
+    role?: "PARENT" | "PROVIDER" | "SCHOOL";
   }) {
     const data = await apiRequest<AuthResponse>("/auth/register", {
       method: "POST",

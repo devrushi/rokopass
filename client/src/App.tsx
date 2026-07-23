@@ -28,6 +28,7 @@ import { ActivityForm } from "./pages/provider/ActivityForm";
 import { ProviderDashboard } from "./pages/provider/ProviderDashboard";
 import { Roster } from "./pages/provider/Roster";
 import { Register } from "./pages/Register";
+import { SchoolDashboard } from "./pages/school/SchoolDashboard";
 
 export default function App() {
   return (
@@ -145,6 +146,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={["PARENT"]}>
               <Invoices />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/school"
+          element={
+            <ProtectedRoute roles={["SCHOOL"]}>
+              <SchoolDashboard />
             </ProtectedRoute>
           }
         />
