@@ -45,6 +45,13 @@ activitiesRouter.get("/", async (req, res, next) => {
         ageGroup: true,
         media: true,
         provider: { select: { id: true, firstName: true, lastName: true } },
+        // Just enough to render a "Sat 10:00 · 45 min" summary on the Browse card — the full
+        // session calendar lives on the activity detail page, this is a lightweight preview.
+        recurringSchedules: {
+          select: { dayOfWeek: true, startTime: true, durationMinutes: true },
+          take: 1,
+          orderBy: { createdAt: "asc" },
+        },
       },
       orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
     });
@@ -58,7 +65,15 @@ activitiesRouter.get("/mine", requireAuth, requireRole("PROVIDER", "ADMIN"), asy
   try {
     const activities = await prisma.activity.findMany({
       where: { providerId: req.user!.sub },
-      include: { ageGroup: true, media: true },
+      include: {
+        ageGroup: true,
+        media: true,
+        recurringSchedules: {
+          select: { dayOfWeek: true, startTime: true, durationMinutes: true },
+          take: 1,
+          orderBy: { createdAt: "asc" },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
     res.json({ activities });

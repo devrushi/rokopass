@@ -1382,3 +1382,55 @@ a provider's pending-approval queue, and a school's provider directory
 as intended. All seeded accounts share one password
 (`PitchDemo123`, printed by the script on every run) — the exact emails
 are printed too, so nothing needs to be memorized ahead of a live demo.
+
+### 2026-07-24 — Activity Cards Matching roshelia.co.uk, Plus Real Demo Photos
+
+Follow-up to the brand redesign: the previous pass matched colors/type/
+shapes site-wide, but the activity *cards* specifically hadn't been
+rebuilt to the reference's own card component — this pass reads that
+component's computed styles directly (not eyeballed) and reproduces it
+exactly, then makes sure real photos actually render on it.
+
+**Built:**
+- New shared `ActivityCard` component (`client/src/components/
+  ActivityCard.tsx` + `ActivityCard.css`) — transcribed from the
+  reference site's own `.act-card`: 320px-ish card, 20px radius, the
+  exact two-layer shadow, an image with a white "Ages X–Y" badge
+  (top-left) and a dark blurred "N credits" badge (bottom-right — the
+  reference shows "Coming soon" there since it's pre-launch; ours shows
+  the real credit cost, the natural live-product equivalent of that
+  slot), then a body with title/meta line/tag pills (amber age pill,
+  cyan category pill) in the reference's exact colors. Added one bonus
+  tag of our own — a green SEND-friendly pill — using the same visual
+  language for a feature the reference doesn't have.
+  Used on `Browse.tsx` (parent-facing) and `ActivitiesList.tsx`
+  (provider's own activities) via a `browse-grid` responsive grid,
+  replacing the old flex-row `.activity-card` list rendering on both.
+  The plain `.activity-card` class itself is untouched and still used
+  everywhere else (roster rows, admin lists, etc.) — this is a new,
+  separate component for the specific "browsable shop-window" case, not
+  a global rename.
+- `GET /activities` and `GET /activities/mine` now also include each
+  activity's first `recurringSchedule` (day/time/duration only) so the
+  card's meta line can show "Sat 10:00 · 45 min" — a small, additive
+  `include` widening, not a new endpoint.
+- **Real images, not blank cards** — `prisma/demo-assets.ts` generates
+  SVG images locally (a category-themed gradient illustration with a
+  large emoji for activity photos; an initials avatar for instructor/
+  staff photos) and writes them as real files under `uploads/activities/`
+  using the exact same URL convention `src/lib/upload.ts`'s real upload
+  flow uses, so they render identically to a genuine provider photo
+  upload — no external image service, so a live pitch never depends on
+  internet access for photos to load. `prisma/seed-demo.ts` now creates
+  one activity photo and one shared-per-provider instructor photo (with
+  a "Firstname Lastname, Lead Instructor" caption) for every seeded
+  activity, clearing old demo media (DB rows and files) first so re-runs
+  don't accumulate duplicates.
+
+**Verified:** 135 backend tests green (the `include` widening is
+additive, confirmed via `toMatchObject`-style partial assertions
+elsewhere in the suite already tolerating new fields), both builds
+clean. Real browser pass: Browse's card grid, the provider's own
+activities grid, and an activity detail page's "Meet the team" section
+all render real photos and avatars with zero console errors — visually
+near-identical to the reference site's own activity cards.

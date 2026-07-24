@@ -1,0 +1,127 @@
+/* Matches roshelia.co.uk's activity card exactly (colors/radii/badges transcribed from its own
+   computed styles) — see AGENTS.md for how these were captured. */
+
+.browse-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+
+.browse-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid rgba(0, 39, 51, 0.06);
+  border-radius: 20px;
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.browse-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 39, 51, 0.12), 0 0 0 1px rgba(0, 39, 51, 0.04);
+}
+
+.browse-card__image {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  background: var(--surface-alt);
+}
+
+.browse-card__image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.browse-card__image-fallback {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, var(--cyan), var(--ink));
+}
+
+.browse-card__age-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  background: #fff;
+  color: var(--ink-2);
+  font-size: 0.69rem;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 999px;
+}
+
+.browse-card__credit-badge {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 0.69rem;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: 999px;
+}
+
+.browse-card__body {
+  padding: 1rem 1.1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.browse-card__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink, var(--text));
+}
+
+.browse-card__meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.browse-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.browse-card__tag {
+  font-size: 0.69rem;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 999px;
+}
+
+.browse-card__tag--age {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+
+.browse-card__tag--cat {
+  background: var(--cyan-soft);
+  color: var(--ink-2);
+}
+
+.browse-card__tag--send {
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+}
+
+@media (prefers-color-scheme: dark) {
+  .browse-card__title {
+    color: var(--text);
+  }
+
+  .browse-card__tag--cat {
+    color: var(--cyan);
+  }
+}

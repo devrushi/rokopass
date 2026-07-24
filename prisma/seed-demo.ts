@@ -13,8 +13,11 @@
  * All seeded accounts share one password: see DEMO_PASSWORD below. This is dummy data for a
  * live walkthrough, not anything resembling production credentials.
  */
+import fs from "node:fs";
+import path from "node:path";
 import { prisma } from "../src/lib/prisma";
 import { hashPassword } from "../src/lib/password";
+import { generateActivityPhoto, generateStaffAvatar } from "./demo-assets";
 
 const DEMO_PASSWORD = "PitchDemo123";
 const DAY_MS = 24 * 60 * 60_000;
@@ -516,6 +519,52 @@ async function seedActivities() {
   console.log(`Seeded ${ACTIVITIES.length} activities with schedules and sessions.`);
 }
 
+/**
+ * One activity photo per activity (a locally-generated, category-themed illustration — see
+ * prisma/demo-assets.ts) and one "meet the instructor" staff photo per provider, reused across
+ * all of that provider's activities. Old demo media (and its files on disk) is cleared first so
+ * re-running this script doesn't pile up duplicate photos.
+ */
+async function seedMedia() {
+  const providerEmails = PROVIDERS.map((p) => p.email);
+  const providers = await prisma.user.findMany({ where: { email: { in: providerEmails } } });
+  const activities = await prisma.activity.findMany({
+    where: { providerId: { in: providers.map((p) => p.id) } },
+  });
+  const activityIds = activities.map((a) => a.id);
+
+  const oldMedia = await prisma.activityMedia.findMany({ where: { activityId: { in: activityIds } } });
+  for (const media of oldMedia) {
+    const filePath = path.resolve(process.cwd(), media.url.replace(/^\//, ""));
+    fs.rm(filePath, { force: true }, () => {});
+  }
+  await prisma.activityMedia.deleteMany({ where: { activityId: { in: activityIds } } });
+
+  const staffAvatarByProvider = new Map<string, string>();
+  providers.forEach((provider, index) => {
+    staffAvatarByProvider.set(provider.id, generateStaffAvatar(provider.firstName, provider.lastName, index));
+  });
+
+  for (const activity of activities) {
+    const photoUrl = generateActivityPhoto(activity.category);
+    await prisma.activityMedia.create({
+      data: { activityId: activity.id, type: "ACTIVITY_PHOTO", url: photoUrl, caption: activity.title },
+    });
+
+    const provider = providers.find((p) => p.id === activity.providerId)!;
+    await prisma.activityMedia.create({
+      data: {
+        activityId: activity.id,
+        type: "STAFF_PHOTO",
+        url: staffAvatarByProvider.get(provider.id)!,
+        caption: `${provider.firstName} ${provider.lastName}, Lead Instructor`,
+      },
+    });
+  }
+
+  console.log(`Seeded activity photos and instructor photos for ${activities.length} activities.`);
+}
+
 async function seedChildren() {
   for (const p of PARENTS) {
     const parent = await prisma.user.findUniqueOrThrow({ where: { email: p.email } });
@@ -808,6 +857,7 @@ async function main() {
 
   await seedUsers();
   await seedActivities();
+  await seedMedia();
   await seedChildren();
   await wipeTransactionalDemoData();
   await seedSubscriptions();

@@ -14,6 +14,12 @@ export interface ActivityMedia {
   caption: string | null;
 }
 
+export interface ActivityScheduleSummary {
+  dayOfWeek: number;
+  startTime: string;
+  durationMinutes: number;
+}
+
 export interface Activity {
   id: string;
   providerId: string;
@@ -29,6 +35,7 @@ export interface Activity {
   isSendFriendly: boolean;
   ageGroup: AgeGroup;
   media: ActivityMedia[];
+  recurringSchedules?: ActivityScheduleSummary[];
   createdAt: string;
   updatedAt: string;
 }

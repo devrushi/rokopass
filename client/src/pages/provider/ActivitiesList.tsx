@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { ActivityCard } from "../../components/ActivityCard";
 import { apiRequest, ApiError } from "../../lib/apiClient";
 import type { Activity } from "../../lib/types";
 import "./provider.css";
@@ -32,23 +33,11 @@ export function ActivitiesList() {
       )}
 
       {activities && activities.length > 0 && (
-        <ul className="activity-list">
+        <div className="browse-grid">
           {activities.map((activity) => (
-            <li key={activity.id}>
-              <Link to={`/provider/activities/${activity.id}`} className="activity-card">
-                <div>
-                  <strong>{activity.title}</strong>
-                  <div className="activity-card__meta">
-                    {activity.category} · {activity.ageGroup.label} · {activity.location}
-                  </div>
-                </div>
-                <div className="activity-card__meta">
-                  {activity.creditCost} credits · capacity {activity.capacity}
-                </div>
-              </Link>
-            </li>
+            <ActivityCard key={activity.id} activity={activity} linkTo={`/provider/activities/${activity.id}`} />
           ))}
-        </ul>
+        </div>
       )}
     </div>
   );

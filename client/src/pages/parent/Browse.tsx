@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { apiAssetUrl, apiRequest, ApiError } from "../../lib/apiClient";
+import { ActivityCard } from "../../components/ActivityCard";
+import { apiRequest, ApiError } from "../../lib/apiClient";
 import type { Activity } from "../../lib/types";
 import "../provider/provider.css";
 
@@ -34,36 +34,11 @@ export function Browse() {
       {activities && activities.length === 0 && <p className="page-status">No activities yet.</p>}
 
       {activities && activities.length > 0 && (
-        <ul className="activity-list">
-          {activities.map((activity) => {
-            const cover = activity.media.find((m) => m.type === "ACTIVITY_PHOTO");
-            return (
-              <li key={activity.id}>
-                <Link to={`/browse/${activity.id}`} className="activity-card">
-                  {cover && (
-                    <img
-                      src={apiAssetUrl(cover.url)}
-                      alt=""
-                      className="activity-card__thumb"
-                      width={64}
-                      height={64}
-                    />
-                  )}
-                  <div>
-                    <strong>
-                      {activity.title}
-                      {activity.isSendFriendly && " · SEND-friendly"}
-                    </strong>
-                    <div className="activity-card__meta">
-                      {activity.category} · {activity.ageGroup.label} · {activity.location}
-                    </div>
-                  </div>
-                  <div className="activity-card__meta">{activity.creditCost} credits / class</div>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        <div className="browse-grid">
+          {activities.map((activity) => (
+            <ActivityCard key={activity.id} activity={activity} linkTo={`/browse/${activity.id}`} />
+          ))}
+        </div>
       )}
     </div>
   );
