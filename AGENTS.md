@@ -1619,3 +1619,31 @@ gross → £4.50 commission → £25.50 net) and downloaded + read the PDF
 twice — the second read is what caught the column-jumbling bug above;
 the third read, after the fix, showed a correctly aligned table and
 summary.
+
+### 2026-07-24 — Browse: Location Filter
+
+A location filter for Browse activities, matching the category
+filter's pattern. Location is free text set per-provider on the
+activity form (not a fixed list like category), so the filter's
+options are the distinct locations actually in use, not a hardcoded
+array.
+
+**Built:**
+- `GET /activities/locations` (`src/routes/activities.ts`, registered
+  before `GET /:id` so `/locations` doesn't get parsed as an activity
+  id) — distinct, alphabetically-sorted locations from the same
+  publicly-visible activity set `GET /activities` already uses
+  (active, unflagged, approved provider).
+- `GET /activities` accepts an optional `?location=` exact-match
+  filter, additive to the existing `category`/`sendFriendly` filters.
+- `Browse.tsx` fetches the location list once on mount and renders it
+  as a `<select>` dropdown (a dropdown rather than chips, since the
+  list is provider-entered free text with no fixed upper bound, unlike
+  category's fixed 8 options) alongside the SEND-friendly checkbox; a
+  failure to load locations degrades to browsing without that one
+  filter rather than blocking the page.
+
+**Verified:** 164 backend tests green (2 new — location filtering,
+and the locations endpoint's distinctness/sort/visibility). Real
+browser pass: selecting "Belgrave Sports Hall" correctly narrowed the
+grid to only that venue's activities, zero console errors.

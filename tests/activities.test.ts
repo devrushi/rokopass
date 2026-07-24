@@ -188,6 +188,42 @@ describe("GET /activities", () => {
       expect(activity.category).toBe("Football");
     }
   });
+
+  it("filters by location", async () => {
+    const uniqueLocation = `Test Sports Hall ${Date.now()}`;
+    const createRes = await request(app)
+      .post("/activities")
+      .set("Authorization", `Bearer ${providerToken}`)
+      .send({ ...validActivity(), title: "Location Filter Test", location: uniqueLocation });
+    const activityId = createRes.body.activity.id as string;
+
+    const matching = await request(app).get(`/activities?location=${encodeURIComponent(uniqueLocation)}`);
+    expect(matching.status).toBe(200);
+    expect(matching.body.activities.map((a: { id: string }) => a.id)).toEqual([activityId]);
+
+    const nonMatching = await request(app).get("/activities?location=Nowhere+That+Exists");
+    expect(nonMatching.status).toBe(200);
+    expect(nonMatching.body.activities.some((a: { id: string }) => a.id === activityId)).toBe(false);
+  });
+});
+
+describe("GET /activities/locations", () => {
+  it("returns distinct, alphabetically-sorted locations from publicly-visible activities", async () => {
+    const uniqueLocation = `Zzz Test Venue ${Date.now()}`;
+    await request(app)
+      .post("/activities")
+      .set("Authorization", `Bearer ${providerToken}`)
+      .send({ ...validActivity(), title: "Locations List Test", location: uniqueLocation });
+
+    const res = await request(app).get("/activities/locations");
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.locations)).toBe(true);
+    expect(res.body.locations).toContain(uniqueLocation);
+    // No duplicates.
+    expect(new Set(res.body.locations).size).toBe(res.body.locations.length);
+    // Alphabetically sorted.
+    expect(res.body.locations).toEqual([...res.body.locations].sort());
+  });
 });
 
 describe("recurring schedules and sessions", () => {

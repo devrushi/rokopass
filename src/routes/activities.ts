@@ -30,6 +30,7 @@ activitiesRouter.get("/", async (req, res, next) => {
   try {
     const sendFriendly = req.query.sendFriendly === "true";
     const category = typeof req.query.category === "string" ? req.query.category : undefined;
+    const location = typeof req.query.location === "string" ? req.query.location : undefined;
 
     const activities = await prisma.activity.findMany({
       where: {
@@ -37,6 +38,7 @@ activitiesRouter.get("/", async (req, res, next) => {
         isFlagged: false,
         ...(sendFriendly ? { isSendFriendly: true } : {}),
         ...(category ? { category } : {}),
+        ...(location ? { location } : {}),
         // Public listing only shows activities from verified providers (or admin-created ones,
         // which have no verificationStatus to check). Providers still see their own pending
         // activities via GET /activities/mine while awaiting approval — this only hides them
@@ -58,6 +60,29 @@ activitiesRouter.get("/", async (req, res, next) => {
       orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
     });
     res.json({ activities });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Distinct locations across publicly-visible activities, for the Browse page's location filter
+// dropdown — location is free text set by each provider (see ActivityForm.tsx), not a fixed
+// list like category, so the filter's options have to come from what's actually in use rather
+// than being hardcoded. Must be registered before GET /:id or "locations" would be parsed as an
+// activity id.
+activitiesRouter.get("/locations", async (_req, res, next) => {
+  try {
+    const activities = await prisma.activity.findMany({
+      where: {
+        isActive: true,
+        isFlagged: false,
+        provider: { OR: [{ role: "ADMIN" }, { verificationStatus: "APPROVED" }] },
+      },
+      select: { location: true },
+      distinct: ["location"],
+      orderBy: { location: "asc" },
+    });
+    res.json({ locations: activities.map((a) => a.location) });
   } catch (err) {
     next(err);
   }

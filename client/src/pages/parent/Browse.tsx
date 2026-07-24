@@ -19,17 +19,29 @@ const CATEGORIES = [
 export function Browse() {
   const [activities, setActivities] = useState<Activity[] | null>(null);
   const [category, setCategory] = useState("All");
+  const [location, setLocation] = useState("All");
+  const [locations, setLocations] = useState<string[]>([]);
   const [sendFriendlyOnly, setSendFriendlyOnly] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiRequest<{ locations: string[] }>("/activities/locations", { skipAuth: true })
+      .then((data) => setLocations(data.locations))
+      .catch(() => {
+        // The location dropdown is a nice-to-have filter — if it fails to load, browsing without
+        // it (still fully functional via category/SEND-friendly) is a fine degraded state.
+      });
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams();
     if (sendFriendlyOnly) params.set("sendFriendly", "true");
     if (category !== "All") params.set("category", category);
+    if (location !== "All") params.set("location", location);
     apiRequest<{ activities: Activity[] }>(`/activities?${params.toString()}`, { skipAuth: true })
       .then((data) => setActivities(data.activities))
       .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load activities"));
-  }, [sendFriendlyOnly, category]);
+  }, [sendFriendlyOnly, category, location]);
 
   return (
     <div className="provider-page">
@@ -48,14 +60,28 @@ export function Browse() {
         ))}
       </div>
 
-      <label className="form__checkbox">
-        <input
-          type="checkbox"
-          checked={sendFriendlyOnly}
-          onChange={(e) => setSendFriendlyOnly(e.target.checked)}
-        />
-        SEND-friendly only
-      </label>
+      <div className="browse-filter-row">
+        <label className="form__checkbox">
+          <input
+            type="checkbox"
+            checked={sendFriendlyOnly}
+            onChange={(e) => setSendFriendlyOnly(e.target.checked)}
+          />
+          SEND-friendly only
+        </label>
+
+        <label className="browse-filter-row__select">
+          Location
+          <select value={location} onChange={(e) => setLocation(e.target.value)}>
+            <option value="All">All locations</option>
+            {locations.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       {error && <p className="form__error">{error}</p>}
       {!activities && !error && <p className="page-status">Loading…</p>}

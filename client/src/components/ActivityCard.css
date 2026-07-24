@@ -44,6 +44,32 @@
   border-color: var(--ink-2);
 }
 
+.browse-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  margin: 0.25rem 0 1rem;
+}
+
+.browse-filter-row__select {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.browse-filter-row__select select {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
 .browse-card {
   display: flex;
   flex-direction: column;
