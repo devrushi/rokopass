@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { param } from "../lib/requestParams";
 import { prisma } from "../lib/prisma";
-import { childPhotoPublicUrl, childPhotoUpload, deleteChildPhotoFile } from "../lib/upload";
+import { deleteChildPhotoFile, imageUpload, saveChildPhoto } from "../lib/upload";
 import { AppError } from "../middleware/errorHandler";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireRole } from "../middleware/requireRole";
@@ -76,7 +76,7 @@ childrenRouter.post("/:id/photo", requireAuth, requireRole("PARENT", "ADMIN"), (
 
   loadOwnedChild(childId, req.user!.sub, req.user!.role)
     .then((child) => {
-      childPhotoUpload.single("file")(req, res, async (uploadErr) => {
+      imageUpload.single("file")(req, res, async (uploadErr) => {
         try {
           if (uploadErr) {
             throw new AppError(uploadErr.message || "Upload failed", 400);
@@ -85,15 +85,17 @@ childrenRouter.post("/:id/photo", requireAuth, requireRole("PARENT", "ADMIN"), (
             throw new AppError("No file uploaded", 400);
           }
 
-          // Replacing an existing photo — remove the old file so uploads/ doesn't accumulate
+          const photoUrl = await saveChildPhoto(req.file);
+
+          // Replacing an existing photo — remove the old file so storage doesn't accumulate
           // orphaned images every time a parent changes their child's photo.
           if (child.photoUrl) {
-            deleteChildPhotoFile(child.photoUrl);
+            await deleteChildPhotoFile(child.photoUrl);
           }
 
           const updated = await prisma.child.update({
             where: { id: childId },
-            data: { photoUrl: childPhotoPublicUrl(req.file.filename) },
+            data: { photoUrl },
           });
 
           res.json({ child: updated });
@@ -109,7 +111,7 @@ childrenRouter.delete("/:id/photo", requireAuth, requireRole("PARENT", "ADMIN"),
   try {
     const child = await loadOwnedChild(param(req.params.id), req.user!.sub, req.user!.role);
     if (child.photoUrl) {
-      deleteChildPhotoFile(child.photoUrl);
+      await deleteChildPhotoFile(child.photoUrl);
     }
     const updated = await prisma.child.update({ where: { id: child.id }, data: { photoUrl: null } });
     res.json({ child: updated });

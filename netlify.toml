@@ -1,0 +1,37 @@
+# Deploys the client/ Vite app as the static site and wraps the existing Express API
+# (src/app.ts) in a single Netlify Function (netlify/functions/api.ts, via serverless-http)
+# rather than rewriting every route as its own function — see AGENTS.md for the reasoning.
+
+[build]
+  # Root npm install triggers `postinstall: prisma generate`, needed before the function
+  # bundler picks up @prisma/client. Client build only needs its own install.
+  command = "npm install && cd client && npm install && npm run build"
+  publish = "client/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Same-origin API calls (frontend and function share this site's domain), so the client is
+  # built to call /api/* rather than a separate host — no CORS configuration needed either.
+  VITE_API_URL = "/api"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# API traffic — the frontend calls VITE_API_URL + "/auth/login" etc.; VITE_API_URL is set to
+# "/api" for the Netlify build (same-origin, no CORS needed) so requests land here. Several
+# backend route prefixes (children, bookings, admin, leaderboard) collide with frontend page
+# paths of the same name, which is exactly why this needs the /api namespace rather than a
+# catch-all "everything not a static file is the API" rule.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# React Router client-side routes (e.g. /dashboard, /browse/:id) aren't real files — let the SPA
+# handle them. Must come after the /api rule above.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

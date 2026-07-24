@@ -2,79 +2,114 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import multer from "multer";
+import { getUploadsStore } from "./blobStore";
 
-// Local disk storage under <project root>/uploads, served statically at /uploads (see app.ts).
-// No object-storage provider (S3/Cloudinary/etc.) is configured for this project — this is the
-// seam to swap in one later, same pattern as src/lib/email.ts's console-log email transport.
+// Local disk storage under <project root>/uploads, served statically at /uploads (see app.ts) —
+// used everywhere EXCEPT when actually running inside a Netlify Function (deployed, or under
+// `netlify dev`), where the filesystem is read-only and nothing written to it survives past the
+// invocation. Netlify sets NETLIFY=true in both of those contexts; nowhere else (plain
+// `tsx watch`, the test suite, demo-data seeding) does, so this switch is evaluated per-call
+// rather than cached at import time — nothing about local dev, tests, or seeding changes.
 // process.cwd() rather than __dirname specifically because __dirname differs between running
 // from src/ (tsx) and dist/ (compiled) — both are always invoked from the project root.
 export const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
 const ACTIVITY_MEDIA_DIR = path.join(UPLOAD_ROOT, "activities");
 const CHILD_PHOTO_DIR = path.join(UPLOAD_ROOT, "children");
 const EXPENSE_RECEIPT_DIR = path.join(UPLOAD_ROOT, "receipts");
-fs.mkdirSync(ACTIVITY_MEDIA_DIR, { recursive: true });
-fs.mkdirSync(CHILD_PHOTO_DIR, { recursive: true });
-fs.mkdirSync(EXPENSE_RECEIPT_DIR, { recursive: true });
+
+const CATEGORY_DIRS: Record<UploadCategory, string> = {
+  activities: ACTIVITY_MEDIA_DIR,
+  children: CHILD_PHOTO_DIR,
+  receipts: EXPENSE_RECEIPT_DIR,
+};
+
+type UploadCategory = "activities" | "children" | "receipts";
+
+// Set explicitly by netlify/functions/api.ts before it imports createApp() — deliberately not
+// relying on Netlify's own auto-injected env vars here, since their availability/naming at
+// Function *runtime* (as opposed to build time, where NETLIFY=true is well-documented) isn't
+// something worth staking file storage correctness on. This flag is fully within our control.
+function useBlobStorage(): boolean {
+  return process.env.RUNNING_IN_NETLIFY_FUNCTION === "true";
+}
+
+// A deployed/dev'd Netlify Function's filesystem is read-only outside /tmp — creating these
+// directories there would throw at cold-start. Only needed at all for the local-disk backend.
+if (!useBlobStorage()) {
+  fs.mkdirSync(ACTIVITY_MEDIA_DIR, { recursive: true });
+  fs.mkdirSync(CHILD_PHOTO_DIR, { recursive: true });
+  fs.mkdirSync(EXPENSE_RECEIPT_DIR, { recursive: true });
+}
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
-function createImageUploader(dir: string) {
-  const storage = multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, dir),
-    filename: (_req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      cb(null, `${crypto.randomUUID()}${ext}`);
-    },
+// A single shared multer instance buffering into memory (never writing to disk itself) — which
+// backend actually persists the buffer is decided per-call by persistImage() below, so there's
+// no need for per-category multer configs anymore.
+export const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE_BYTES },
+  fileFilter: (_req, file, cb) => {
+    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      cb(new Error("Only JPEG, PNG, or WEBP images are allowed"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+async function persistImage(category: UploadCategory, file: Express.Multer.File): Promise<string> {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const filename = `${crypto.randomUUID()}${ext}`;
+  const key = `${category}/${filename}`;
+
+  if (useBlobStorage()) {
+    const store = getUploadsStore();
+    // @netlify/blobs' BlobInput accepts string | ArrayBuffer | Blob — not a Node Buffer/Uint8Array
+    // directly, and multer's buffer can be a view into a larger pooled allocation, so slice out
+    // exactly the bytes we want into their own ArrayBuffer. Node Buffers are never backed by a
+    // SharedArrayBuffer in practice (multer's memoryStorage always allocates a plain Buffer).
+    const arrayBuffer = file.buffer.buffer.slice(
+      file.buffer.byteOffset,
+      file.buffer.byteOffset + file.buffer.byteLength,
+    ) as ArrayBuffer;
+    await store.set(key, arrayBuffer, { metadata: { contentType: file.mimetype } });
+  } else {
+    await fs.promises.writeFile(path.join(CATEGORY_DIRS[category], filename), file.buffer);
+  }
+
+  return `/uploads/${key}`;
+}
+
+async function deleteImage(url: string): Promise<void> {
+  const key = url.replace(/^\/uploads\//, "");
+
+  if (useBlobStorage()) {
+    const store = getUploadsStore();
+    await store.delete(key).catch((err) => console.error("Failed to delete blob", key, err));
+    return;
+  }
+
+  const [category, filename] = key.split("/") as [UploadCategory, string];
+  const filePath = path.join(CATEGORY_DIRS[category], filename);
+  await fs.promises.rm(filePath, { force: true }).catch((err) => {
+    console.error("Failed to delete uploaded file", filePath, err);
   });
-
-  return multer({
-    storage,
-    limits: { fileSize: MAX_FILE_SIZE_BYTES },
-    fileFilter: (_req, file, cb) => {
-      if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-        cb(new Error("Only JPEG, PNG, or WEBP images are allowed"));
-        return;
-      }
-      cb(null, true);
-    },
-  });
 }
 
-function deleteFile(dir: string, url: string): void {
-  const filename = path.basename(url);
-  const filePath = path.join(dir, filename);
-  fs.rm(filePath, { force: true }, (err) => {
-    if (err) console.error("Failed to delete uploaded file", filePath, err);
-  });
+export function saveActivityMedia(file: Express.Multer.File): Promise<string> {
+  return persistImage("activities", file);
 }
 
-export const activityMediaUpload = createImageUploader(ACTIVITY_MEDIA_DIR);
-
-export function activityMediaPublicUrl(filename: string): string {
-  return `/uploads/activities/${filename}`;
+export function saveChildPhoto(file: Express.Multer.File): Promise<string> {
+  return persistImage("children", file);
 }
 
-export function deleteActivityMediaFile(url: string): void {
-  deleteFile(ACTIVITY_MEDIA_DIR, url);
+export function saveExpenseReceipt(file: Express.Multer.File): Promise<string> {
+  return persistImage("receipts", file);
 }
 
-export const childPhotoUpload = createImageUploader(CHILD_PHOTO_DIR);
-
-export function childPhotoPublicUrl(filename: string): string {
-  return `/uploads/children/${filename}`;
-}
-
-export function deleteChildPhotoFile(url: string): void {
-  deleteFile(CHILD_PHOTO_DIR, url);
-}
-
-export const expenseReceiptUpload = createImageUploader(EXPENSE_RECEIPT_DIR);
-
-export function expenseReceiptPublicUrl(filename: string): string {
-  return `/uploads/receipts/${filename}`;
-}
-
-export function deleteExpenseReceiptFile(url: string): void {
-  deleteFile(EXPENSE_RECEIPT_DIR, url);
-}
+export const deleteActivityMediaFile = deleteImage;
+export const deleteChildPhotoFile = deleteImage;
+export const deleteExpenseReceiptFile = deleteImage;

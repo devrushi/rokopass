@@ -46,9 +46,10 @@ everything through the log's final entry:
   (sort-to-top) any activity; every moderation action writes an
   `AuditLog` row.
 - **Activity media & contact** — providers upload activity/staff photos
-  (local disk storage — see the flag on that below) and can set a
-  WhatsApp number; parents see both plus a "Chat on WhatsApp" deep link
-  (not a real WhatsApp Business API integration) on an activity's page.
+  (local disk locally, Netlify Blobs when deployed — see the Netlify
+  deployment log entry) and can set a WhatsApp number; parents see both
+  plus a "Chat on WhatsApp" deep link (not a real WhatsApp Business API
+  integration) on an activity's page.
 - **Analytics** — all three roles get a stats section on their dashboard
   (`/dashboard`, `/provider`, `/admin`), computed live from existing
   schema data — no separate tracking/instrumentation. Parents see credit
@@ -1647,3 +1648,88 @@ array.
 and the locations endpoint's distinctness/sort/visibility). Real
 browser pass: selecting "Belgrave Sports Hall" correctly narrowed the
 grid to only that venue's activities, zero console errors.
+
+### 2026-07-24 — Netlify Deployment: Serverless Function + Blob Storage (code prep)
+
+The client asked to connect this project to an existing Netlify site
+(rokidspass). Netlify only hosts static sites and serverless functions
+— it has no long-running server process, no Postgres, and no
+persistent local disk — so "deploy the whole app" meant real
+architecture changes, not just a build config. Scope was agreed with
+the client first: frontend + backend both on Netlify (backend as a
+Function, not rewritten route-by-route), Neon for production Postgres,
+and Netlify Blobs replacing local-disk file storage. This entry covers
+the code-level prep only; linking the repo, setting environment
+variables, running the production migration, and the actual first
+deploy all need a Netlify auth token and a Neon connection string from
+the client and haven't happened yet (tracked separately, not in this
+log).
+
+**Built:**
+- **One Function wraps the whole Express app** (`netlify/functions/
+  api.ts`, via `serverless-http`) rather than a route-by-route rewrite
+  — far less risk of subtly breaking something that already works.
+  Lazily imports `src/app.ts` (not a static import — see the comment
+  in that file for why order matters) and caches the wrapped handler
+  across warm invocations so Prisma/the Express app aren't rebuilt on
+  every request. `binary` is configured for images/PDF/CSV/multipart
+  content but deliberately **not** `application/json` — both ordinary
+  JSON API traffic and the raw Stripe webhook body (which needs exact
+  original bytes for signature verification, see `src/routes/
+  webhooks.ts`) need to survive as plain text, not get base64
+  round-tripped. **Not yet verified against a real Stripe webhook
+  delivery** — this specific path (raw body integrity through
+  Netlify's proxy → Lambda event → serverless-http → express.raw())
+  needs testing with the Stripe CLI against the deployed function
+  before trusting it in production.
+- **`netlify.toml`** — `/api/*` rewrites to the function (`/api`
+  specifically, not "everything non-static," because several backend
+  route prefixes collide with frontend page paths of the same name —
+  `/children`, `/bookings`, `/admin`, `/leaderboard` all exist as both
+  an API prefix and a React Router page); a catch-all SPA fallback to
+  `index.html` for client-side routes. `VITE_API_URL=/api` set at
+  build time so the deployed frontend calls same-origin (no CORS
+  needed). Pinned `NODE_VERSION=20` since local dev is on a much newer
+  Node than Netlify's build image supports.
+- **File uploads → Netlify Blobs, but only when actually deployed**
+  (`src/lib/upload.ts`, `src/lib/blobStore.ts`, `src/routes/
+  uploads.ts`) — a `RUNNING_IN_NETLIFY_FUNCTION` flag, set explicitly
+  by the Function wrapper itself (not read from any Netlify-provided
+  env var, since that env var's availability at Function *runtime*
+  specifically wasn't something worth staking file storage correctness
+  on), switches `multer` from writing to disk to buffering in memory
+  and persisting via `@netlify/blobs`, and switches the `/uploads`
+  static mount for a small Blobs-backed serving route. **Everywhere
+  else — plain `tsx watch`, the test suite, demo-data seeding — this
+  flag is never set, so local disk storage behaves exactly as before**;
+  this was the main design goal, specifically so this migration
+  wouldn't touch the local dev workflow or require rewriting existing,
+  working, tested upload code paths. New `tests/blobUploads.test.ts`
+  exercises the Blobs code path directly (mocking `@netlify/blobs`,
+  setting the flag) since the rest of the suite only ever exercises the
+  disk fallback.
+- **Prisma** — `binaryTargets` widened to `["native",
+  "rhel-openssl-3.0.x", "rhel-openssl-1.0.x"]` so the generated client
+  includes a query engine that actually runs on Netlify's Lambda-based
+  Function runtime, not just this dev machine.
+
+**Known gap, deliberately deferred:** `prisma/demo-assets.ts` /
+`seed-demo.ts` still write straight to local disk — reseeding demo
+data against the live Netlify+Neon deployment (so pitch-demo photos
+render there) needs its own Blobs-aware pass, scoped separately since
+it isn't required for the app itself to work correctly once deployed.
+
+**Verified:** 169 backend tests green (5 new, exercising the Blobs
+persist/delete code path via mocks), both builds clean, the function
+file typechecks clean standalone (ad hoc, since it lives outside the
+backend's own `tsconfig.json` — `netlify/` isn't compiled by `tsc`,
+only bundled by Netlify's own esbuild step at deploy time), and the
+disk-mode backend still boots and serves `/health` normally outside
+any Netlify context. **Not yet verified:** `netlify dev` — the CLI
+currently throws (`Cannot read properties of undefined (reading
+'Intrinsic')`) under this machine's Node 24, an apparent Node
+24/`netlify-cli@27.0.0` incompatibility unrelated to this project's
+code; doesn't block the real deploy path (`netlify build`/`deploy` run
+on Netlify's own Node-20-pinned build servers), but local `netlify
+dev` iteration isn't currently usable on this machine without an older
+Node version.

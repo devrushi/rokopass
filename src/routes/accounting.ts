@@ -9,11 +9,7 @@ import {
 } from "../lib/stripeConnect";
 import { buildExpensesCsv, buildStatementsCsv, generateStatementPdf } from "../lib/statementDocuments";
 import { getCurrentTaxYear } from "../lib/taxYear";
-import {
-  deleteExpenseReceiptFile,
-  expenseReceiptPublicUrl,
-  expenseReceiptUpload,
-} from "../lib/upload";
+import { deleteExpenseReceiptFile, imageUpload, saveExpenseReceipt } from "../lib/upload";
 import { AppError } from "../middleware/errorHandler";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireRole } from "../middleware/requireRole";
@@ -214,7 +210,7 @@ accountingRouter.delete("/expenses/:id", async (req, res, next) => {
   try {
     const expense = await loadOwnedExpense(param(req.params.id), req.user!.sub, req.user!.role);
     if (expense.receiptUrl) {
-      deleteExpenseReceiptFile(expense.receiptUrl);
+      await deleteExpenseReceiptFile(expense.receiptUrl);
     }
     await prisma.providerExpense.delete({ where: { id: expense.id } });
     res.status(204).send();
@@ -228,7 +224,7 @@ accountingRouter.post("/expenses/:id/receipt", (req, res, next) => {
 
   loadOwnedExpense(expenseId, req.user!.sub, req.user!.role)
     .then((expense) => {
-      expenseReceiptUpload.single("file")(req, res, async (uploadErr) => {
+      imageUpload.single("file")(req, res, async (uploadErr) => {
         try {
           if (uploadErr) {
             throw new AppError(uploadErr.message || "Upload failed", 400);
@@ -236,13 +232,15 @@ accountingRouter.post("/expenses/:id/receipt", (req, res, next) => {
           if (!req.file) {
             throw new AppError("No file uploaded", 400);
           }
+
+          const receiptUrl = await saveExpenseReceipt(req.file);
           if (expense.receiptUrl) {
-            deleteExpenseReceiptFile(expense.receiptUrl);
+            await deleteExpenseReceiptFile(expense.receiptUrl);
           }
 
           const updated = await prisma.providerExpense.update({
             where: { id: expenseId },
-            data: { receiptUrl: expenseReceiptPublicUrl(req.file.filename) },
+            data: { receiptUrl },
           });
           res.json({ expense: updated });
         } catch (err) {

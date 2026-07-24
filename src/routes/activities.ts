@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { activityMediaPublicUrl, activityMediaUpload, deleteActivityMediaFile } from "../lib/upload";
+import { deleteActivityMediaFile, imageUpload, saveActivityMedia } from "../lib/upload";
 import { param } from "../lib/requestParams";
 import { prisma } from "../lib/prisma";
 import { AppError } from "../middleware/errorHandler";
@@ -246,7 +246,7 @@ activitiesRouter.post(
 
     loadOwnedActivity(activityId, req.user!.sub, req.user!.role)
       .then(() => {
-        activityMediaUpload.single("file")(req, res, async (uploadErr) => {
+        imageUpload.single("file")(req, res, async (uploadErr) => {
           try {
             if (uploadErr) {
               throw new AppError(uploadErr.message || "Upload failed", 400);
@@ -257,16 +257,16 @@ activitiesRouter.post(
 
             const parsed = uploadMediaSchema.safeParse(req.body);
             if (!parsed.success) {
-              deleteActivityMediaFile(req.file.filename);
               throw new AppError(parsed.error.issues[0]?.message ?? "Invalid media data", 400);
             }
 
+            const url = await saveActivityMedia(req.file);
             const media = await prisma.activityMedia.create({
               data: {
                 activityId,
                 type: parsed.data.type,
                 caption: parsed.data.caption,
-                url: activityMediaPublicUrl(req.file.filename),
+                url,
               },
             });
 
@@ -294,7 +294,7 @@ activitiesRouter.delete(
       }
 
       await prisma.activityMedia.delete({ where: { id: media.id } });
-      deleteActivityMediaFile(media.url);
+      await deleteActivityMediaFile(media.url);
 
       res.status(204).send();
     } catch (err) {

@@ -19,6 +19,7 @@ import { healthRouter } from "./routes/health";
 import { leaderboardRouter } from "./routes/leaderboard";
 import { schoolsRouter } from "./routes/schools";
 import { sessionsRouter } from "./routes/sessions";
+import { uploadsRouter } from "./routes/uploads";
 import { webhooksRouter } from "./routes/webhooks";
 
 export function createApp() {
@@ -36,17 +37,23 @@ export function createApp() {
     app.use(morgan(env.NODE_ENV === "development" ? "dev" : "combined"));
   }
 
+  // Netlify Functions run on a read-only filesystem, so uploaded files live in Netlify Blobs
+  // there instead of local disk — see src/lib/upload.ts for the same env-var switch.
   // helmet's default Cross-Origin-Resource-Policy: same-origin would otherwise block the
   // frontend (a different origin in dev — 5173 vs 3000) from rendering these images in <img>
-  // tags. Only relaxed for this one static path, not the whole app.
-  app.use(
-    "/uploads",
-    (_req, res, next) => {
-      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
-      next();
-    },
-    express.static(UPLOAD_ROOT),
-  );
+  // tags. Only relaxed for this one path, not the whole app.
+  if (process.env.RUNNING_IN_NETLIFY_FUNCTION === "true") {
+    app.use("/uploads", uploadsRouter);
+  } else {
+    app.use(
+      "/uploads",
+      (_req, res, next) => {
+        res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+        next();
+      },
+      express.static(UPLOAD_ROOT),
+    );
+  }
 
   app.use("/health", healthRouter);
   app.use("/auth", authRouter);
