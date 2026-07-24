@@ -1333,3 +1333,52 @@ dark mode in a real browser: login/register, all three original
 dashboards, the school directory, browse, and plans — zero console
 errors anywhere. Side-by-side against the reference site, the palette,
 button shapes, and wordmark now genuinely read as the same product.
+
+### 2026-07-24 — Pitch-Day Demo Data
+
+`prisma/seed-demo.ts` — a richer dataset layered on top of the baseline
+`prisma/seed.ts` (age groups/admin/quick-logins/plans), built so every
+dashboard has something real to show live rather than empty states. Run
+with `npx tsx prisma/seed-demo.ts` after the baseline seed. Safe to
+re-run: users/activities/schools are upserted by email/title; bookings
+and credit history are wiped and rebuilt each run (`wipeTransactionalDemoData`)
+so the story stays internally consistent instead of accumulating
+duplicate history across runs.
+
+**What it seeds, and why each piece is there:**
+- **7 providers** spanning every moderation state on purpose, not just
+  the happy path: 5 `APPROVED` (one with no DBS on file, one with an
+  *expired* DBS — both flagged red in the UI, a real "here's what the
+  platform catches" demo moment), 1 `PENDING` (sits in the admin queue,
+  approvable live on stage), 1 `REJECTED` (shows the full lifecycle).
+- **9 activities** across 6 categories with real recurring schedules and
+  both past and future sessions — one `isFeatured` (sorts to the top of
+  Browse), one `isFlagged` (correctly hidden from Browse, visible in
+  admin moderation — didn't work around this, the demo data proves the
+  gating actually works).
+- **8 parents / 12 children**, one with no active subscription (funded
+  only by a Community Fund grant — see below), a couple with allergy
+  notes, five children opted into the leaderboard with real attendance
+  so it renders a real ranking instead of "no one yet."
+- **23 bookings covering every `BookingStatus` value** — `ATTENDED`,
+  `NO_SHOW`, `CONFIRMED`, `PENDING_APPROVAL` (approvable live), `REJECTED`,
+  `CANCELLED` — with backdated `createdAt`/`updatedAt` so approval-speed
+  analytics show a real number instead of zero. Credit ledger entries
+  mirror exactly what `src/services/booking.ts` itself would have
+  written for each state (deduct on request, refund on reject/cancel),
+  just created directly rather than through the HTTP/service layer, for
+  speed and exact date control.
+- **2 schools** (one `APPROVED` with a mix of shortlisted/approved
+  providers and notes, one `PENDING`) and a **Community Fund** with two
+  donations and one grant — funding the one subscription-less family
+  above, a concrete illustration of what the fund is for.
+
+**Verified:** 135 backend tests still green (pure data, no code path
+changed). Screenshotted every dashboard in a real browser after seeding
+— admin's platform overview, the leaderboard, Browse (confirming the
+flagged activity is correctly absent and the featured one sorts first),
+a provider's pending-approval queue, and a school's provider directory
+(showing the expired/missing-DBS warnings in context) all render exactly
+as intended. All seeded accounts share one password
+(`PitchDemo123`, printed by the script on every run) — the exact emails
+are printed too, so nothing needs to be memorized ahead of a live demo.
