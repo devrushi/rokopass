@@ -24,30 +24,38 @@ enum ProviderVerificationStatus {
 }
 
 model User {
-  id                 String                       @id @default(uuid())
-  email              String                       @unique
-  passwordHash       String
-  firstName          String
-  lastName           String
-  role               UserRole                     @default(PARENT)
-  verificationStatus ProviderVerificationStatus?
-  stripeCustomerId   String?                      @unique
+  id                      String                      @id @default(uuid())
+  email                   String                      @unique
+  passwordHash            String
+  firstName               String
+  lastName                String
+  role                    UserRole                    @default(PARENT)
+  verificationStatus      ProviderVerificationStatus?
+  stripeCustomerId        String?                     @unique
   // E.164-ish (e.g. "+441234567890"), used to build a wa.me deep link for parents to message a
   // provider directly — not a real WhatsApp Business API integration, see AGENTS.md.
-  whatsappNumber     String?
+  whatsappNumber          String?
   // Provider marketing links, shown on their public activity pages. Plain URLs, not a real
   // social API integration (posting/reading requires per-platform developer credentials this
   // project doesn't have) — same class of seam as whatsappNumber above.
-  instagramUrl       String?
-  facebookUrl        String?
-  tiktokUrl          String?
+  instagramUrl            String?
+  facebookUrl             String?
+  tiktokUrl               String?
   // Provider safeguarding record — self-reported by the provider, reviewed by an admin before
   // approval. Not a live DBS registry check (that requires official umbrella-body registration,
   // not just an API key); see AGENTS.md for the MVP-vs-real-verification note.
   dbsCertificateNumber    String?
   dbsCertificateExpiresAt DateTime?
-  createdAt          DateTime                     @default(now())
-  updatedAt          DateTime                     @updatedAt
+  // Stripe Connect (Express) — how a PROVIDER actually receives their payout statement's net
+  // amount. Created lazily on first onboarding-link request, not at registration, since most
+  // providers won't touch this until they have real earnings. payoutsEnabled/detailsSubmitted
+  // are synced from Stripe's `account.updated` webhook, not set directly — see
+  // src/routes/webhooks.ts and AGENTS.md.
+  stripeConnectAccountId  String?                     @unique
+  connectDetailsSubmitted Boolean                     @default(false)
+  connectPayoutsEnabled   Boolean                     @default(false)
+  createdAt               DateTime                    @default(now())
+  updatedAt               DateTime                    @updatedAt
 
   activities         Activity[]
   subscription       Subscription?
@@ -58,6 +66,10 @@ model User {
 
   schoolApprovalsGiven    SchoolProviderApproval[] @relation("SchoolApprovalsGiven")
   schoolApprovalsReceived SchoolProviderApproval[] @relation("SchoolApprovalsReceived")
+
+  businessProfile  ProviderBusinessProfile?
+  payoutStatements PayoutStatement[]
+  expenses         ProviderExpense[]
 }
 
 enum SchoolApprovalStatus {
@@ -103,21 +115,21 @@ model Activity {
   ageGroupId String
   ageGroup   AgeGroup @relation(fields: [ageGroupId], references: [id])
 
-  title       String
-  description String
-  category    String
-  location    String
-  capacity    Int
-  creditCost  Int
-  isActive    Boolean  @default(true)
-  isFlagged   Boolean  @default(false)
-  isFeatured  Boolean  @default(false)
+  title          String
+  description    String
+  category       String
+  location       String
+  capacity       Int
+  creditCost     Int
+  isActive       Boolean  @default(true)
+  isFlagged      Boolean  @default(false)
+  isFeatured     Boolean  @default(false)
   // Provider-declared: this activity is run in a way suitable for children with special
   // educational needs/disabilities. Self-reported, not independently verified — a filter/badge,
   // not a certification.
-  isSendFriendly Boolean @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isSendFriendly Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   recurringSchedules RecurringSchedule[]
   sessions           ClassSession[]
@@ -177,12 +189,12 @@ model ClassSession {
   recurringScheduleId String?
   recurringSchedule   RecurringSchedule? @relation(fields: [recurringScheduleId], references: [id], onDelete: SetNull)
 
-  startsAt     DateTime
-  endsAt       DateTime
-  capacity     Int
-  isCancelled  Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  startsAt    DateTime
+  endsAt      DateTime
+  capacity    Int
+  isCancelled Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   bookings Booking[]
 
@@ -191,25 +203,25 @@ model ClassSession {
 }
 
 model Child {
-  id          String   @id @default(uuid())
-  parentId    String
-  parent      User     @relation(fields: [parentId], references: [id])
-  firstName   String
-  lastName    String
-  dateOfBirth DateTime
+  id              String   @id @default(uuid())
+  parentId        String
+  parent          User     @relation(fields: [parentId], references: [id])
+  firstName       String
+  lastName        String
+  dateOfBirth     DateTime
   // Special-category health data (UK GDPR) — free text set by the parent, only ever exposed to
   // the specific provider running a session this child is booked into (via the roster/attendees
   // endpoint), never in any public or cross-provider listing. See AGENTS.md.
-  allergyInfo String?
+  allergyInfo     String?
   // Opt-in, default false — a child only appears on the leaderboard if a parent explicitly
   // turns this on, and even then only as "Firstname L." (see src/services/leaderboard.ts).
-  isOnLeaderboard Boolean @default(false)
+  isOnLeaderboard Boolean  @default(false)
   // Optional, parent-uploaded — same local-disk seam as activity/staff photos (see
   // src/lib/upload.ts). Only ever shown to the child's own parent and, if isOnLeaderboard is
   // also on, on the leaderboard alongside the same "Firstname L." pseudonym — never full name.
-  photoUrl String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  photoUrl        String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   bookings Booking[]
 
@@ -243,7 +255,8 @@ model Booking {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  creditTransactions CreditTransaction[]
+  creditTransactions  CreditTransaction[]
+  payoutStatementLine PayoutStatementLine?
 
   @@unique([childId, sessionId])
   @@index([sessionId])
@@ -321,16 +334,16 @@ enum CreditTransactionReason {
 // append-only ledger avoids lost updates under concurrent writes and keeps a full audit trail
 // of every grant/deduction. See src/services/creditBalance.ts.
 model CreditTransaction {
-  id             String                   @id @default(uuid())
+  id             String                  @id @default(uuid())
   userId         String
-  user           User                     @relation(fields: [userId], references: [id])
+  user           User                    @relation(fields: [userId], references: [id])
   subscriptionId String?
-  subscription   Subscription?            @relation(fields: [subscriptionId], references: [id])
+  subscription   Subscription?           @relation(fields: [subscriptionId], references: [id])
   bookingId      String?
-  booking        Booking?                 @relation(fields: [bookingId], references: [id])
+  booking        Booking?                @relation(fields: [bookingId], references: [id])
   amount         Int
   reason         CreditTransactionReason
-  createdAt      DateTime                 @default(now())
+  createdAt      DateTime                @default(now())
 
   @@index([userId])
 }
@@ -368,4 +381,164 @@ model AuditLog {
 
   @@index([targetType, targetId])
   @@index([adminId])
+}
+
+// ---------------------------------------------------------------------------------------------
+// Provider accounting / HMRC bookkeeping
+//
+// A UK sole trader or limited company must keep records of business income and expenses (Income
+// Tax Self Assessment / Corporation Tax), and — if VAT-registered — issue VAT invoices showing
+// their VAT number, the rate charged, and the VAT amount. Records must be kept for at least
+// 5 years after the 31 January Self Assessment deadline they relate to (in practice, ~6 years) —
+// see AGENTS.md. Nothing in this section is tax advice; it gives providers accurate, exportable
+// records to hand to their own accountant or use for their own Self Assessment/VAT return.
+// ---------------------------------------------------------------------------------------------
+
+// A provider's legal/tax identity — distinct from their User profile (which is their platform
+// login/display identity). Required before a payout statement can be generated for them, since
+// HMRC-compliant invoices must show the seller's legal name and address.
+model ProviderBusinessProfile {
+  id                String   @id @default(uuid())
+  providerId        String   @unique
+  provider          User     @relation(fields: [providerId], references: [id])
+  legalBusinessName String
+  addressLine1      String
+  addressLine2      String?
+  city              String
+  postcode          String
+  country           String   @default("GB")
+  // HMRC Unique Taxpayer Reference — informational only, never validated or transmitted
+  // anywhere; stored so it appears alongside a provider's own exported records if they want it.
+  utr               String?
+  isVatRegistered   Boolean  @default(false)
+  vatNumber         String?
+  vatRatePercent    Int      @default(20)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Singleton config row (fixed id) an admin edits — the credit→£ rate and the platform's
+// commission/VAT position, all of which feed into every payout statement generated from this
+// point forward. Never mutated retroactively on old statements (see PayoutStatement's own
+// snapshot fields) — changing a rate here only affects statements generated after the change.
+model PlatformSettings {
+  id                     String   @id @default("singleton")
+  // Pence per credit — there is no other £-per-credit conversion anywhere in the system (credits
+  // are an abstract ledger unit; see CreditTransaction), so this is the one place a provider's
+  // earnings are given a cash value.
+  creditValueGbp         Int      @default(250)
+  commissionRatePercent  Int      @default(15)
+  platformLegalName      String   @default("Roshelia Ltd")
+  platformAddress        String   @default("Leicester, United Kingdom")
+  platformVatRegistered  Boolean  @default(false)
+  platformVatNumber      String?
+  platformVatRatePercent Int      @default(20)
+  updatedAt              DateTime @updatedAt
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+// One statement per provider per period (typically a calendar month) — the combined "you earned
+// this much, we took this much commission (+ VAT on our commission if we're VAT-registered),
+// here's your net payout" document, generated from ATTENDED/NO_SHOW bookings (credits
+// irrecoverably spent — see src/services/payouts.ts) not yet included in an earlier statement.
+// Every money/identity field a real invoice needs is snapshotted at generation time rather than
+// joined live, because an invoice is a legal record that must not silently change if the
+// provider edits their business profile or an admin changes the commission rate later.
+model PayoutStatement {
+  id         String @id @default(uuid())
+  providerId String
+  provider   User   @relation(fields: [providerId], references: [id])
+
+  // Sequential, human-readable, unique — e.g. "STMT-2026-000123". HMRC invoices must have a
+  // unique identifying number; this doubles as that number for the commission-VAT-invoice
+  // portion of the statement.
+  statementNumber String   @unique
+  periodStart     DateTime
+  periodEnd       DateTime
+
+  creditsRedeemed        Int
+  creditValueGbpSnapshot Int // pence per credit, at generation time
+  grossAmountGbp         Int // pence — creditsRedeemed * creditValueGbpSnapshot
+
+  commissionRatePercentSnapshot Int
+  commissionAmountGbp           Int // pence
+  commissionVatGbp              Int @default(0) // pence — 0 unless the platform is VAT-registered
+  netAmountGbp                  Int // pence — gross - commission - commissionVat; the Stripe transfer amount
+
+  providerLegalName String
+  providerAddress   String
+  providerVatNumber String?
+
+  platformLegalName String
+  platformAddress   String
+  platformVatNumber String?
+
+  status           PayoutStatus @default(PENDING)
+  stripeTransferId String?
+  failureReason    String?
+  paidAt           DateTime?
+  createdAt        DateTime     @default(now())
+
+  lines PayoutStatementLine[]
+
+  @@index([providerId])
+}
+
+// One row per booking included in a statement — the itemised detail behind the statement's
+// totals, and the mechanism that prevents a booking from ever being paid out twice (bookingId is
+// unique). Snapshots the activity title and session date so the line still makes sense even if
+// the activity is later edited or deleted.
+model PayoutStatementLine {
+  id                String          @id @default(uuid())
+  payoutStatementId String
+  payoutStatement   PayoutStatement @relation(fields: [payoutStatementId], references: [id], onDelete: Cascade)
+  bookingId         String          @unique
+  booking           Booking         @relation(fields: [bookingId], references: [id])
+
+  activityTitle   String
+  sessionStartsAt DateTime
+  // "Firstname L." — same pseudonymization convention as the leaderboard (see
+  // src/services/leaderboard.ts); a provider's payout statement doesn't need a child's full name
+  // to be useful, and bookingId is there for full traceability if ever needed.
+  childInitials   String
+  creditsSpent    Int
+  amountGbp       Int // pence
+
+  @@index([payoutStatementId])
+}
+
+enum ExpenseCategory {
+  COST_OF_GOODS
+  CAR_VAN_TRAVEL
+  STAFF_WAGES
+  RENT_RATES_UTILITIES
+  REPAIRS_MAINTENANCE
+  ADVERTISING_MARKETING
+  LEGAL_PROFESSIONAL
+  OFFICE_ADMIN
+  OTHER
+}
+
+// Self-reported business expenses a provider logs for their own record-keeping — categories
+// mirror HMRC's SA103 self-employment expense categories so a provider (or their accountant) can
+// map this export straight onto a Self Assessment return. Purely a ledger; nothing here moves
+// money or is verified/audited by the platform.
+model ProviderExpense {
+  id          String          @id @default(uuid())
+  providerId  String
+  provider    User            @relation(fields: [providerId], references: [id])
+  category    ExpenseCategory
+  description String
+  amountGbp   Int // pence
+  incurredOn  DateTime
+  receiptUrl  String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([providerId])
 }

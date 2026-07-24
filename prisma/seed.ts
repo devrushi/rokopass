@@ -176,6 +176,14 @@ async function seedProviderPlans() {
   }
 }
 
+async function seedPlatformSettings() {
+  await prisma.platformSettings.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: { id: "singleton" },
+  });
+}
+
 async function seedAdmin() {
   const passwordHash = await hashPassword(ADMIN_PASSWORD);
   await prisma.user.upsert({
@@ -231,6 +239,7 @@ async function main() {
   // fail in an environment without real keys configured — run it last so a Stripe failure
   // doesn't prevent the (Stripe-independent) age groups and demo/admin users from being seeded.
   await seedAgeGroups();
+  await seedPlatformSettings();
   await seedAdmin();
   await seedDemoAccounts();
   await seedProviderPlans();

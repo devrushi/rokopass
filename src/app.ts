@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { env } from "./config/env";
 import { UPLOAD_ROOT } from "./lib/upload";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { accountingRouter } from "./routes/accounting";
 import { activitiesRouter } from "./routes/activities";
 import { adminRouter } from "./routes/admin";
 import { ageGroupsRouter } from "./routes/ageGroups";
@@ -60,6 +61,7 @@ export function createApp() {
   app.use("/ai", aiRouter);
   app.use("/leaderboard", leaderboardRouter);
   app.use("/schools", schoolsRouter);
+  app.use("/accounting", accountingRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

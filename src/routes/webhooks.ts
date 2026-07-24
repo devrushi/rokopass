@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { env } from "../config/env";
 import { prisma } from "../lib/prisma";
 import { stripe } from "../lib/stripe";
+import { syncConnectAccountFromWebhook } from "../lib/stripeConnect";
 import { AppError } from "../middleware/errorHandler";
 import {
   handleCheckoutSessionCompleted,
@@ -44,6 +45,9 @@ webhooksRouter.post("/stripe", async (req, res, next) => {
       case "customer.subscription.updated":
       case "customer.subscription.deleted":
         await syncSubscriptionFromStripe(event.data.object);
+        break;
+      case "account.updated":
+        await syncConnectAccountFromWebhook(event.data.object as Stripe.Account);
         break;
       default:
         // Unhandled event types are expected — we only act on what this platform needs.

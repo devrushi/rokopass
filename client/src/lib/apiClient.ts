@@ -85,3 +85,38 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
 
   return data as T;
 }
+
+// For file downloads (PDF/CSV) — these routes require the same auth header as any other API
+// request, so a plain <a href> can't hit them directly. Mirrors apiRequest's 401-retry-once
+// behavior but resolves a Blob instead of parsed JSON.
+export async function apiDownload(path: string): Promise<Blob> {
+  let res = await rawRequest(path);
+
+  if (res.status === 401 && getRefreshToken()) {
+    refreshPromise ??= refreshAccessToken().finally(() => {
+      refreshPromise = null;
+    });
+    const refreshed = await refreshPromise;
+
+    if (refreshed) {
+      res = await rawRequest(path);
+    } else {
+      clearTokens();
+    }
+  }
+
+  if (!res.ok) {
+    throw new ApiError(`Download failed with status ${res.status}`, res.status);
+  }
+
+  return res.blob();
+}
+
+export function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}

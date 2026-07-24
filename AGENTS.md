@@ -1497,3 +1497,125 @@ and correct singular/plural class counts; My Children shows photo
 upload/change/remove controls working end-to-end; Browse's category
 chips correctly filter results (e.g. selecting "Football" hides
 non-football activities) — zero console errors in any of these flows.
+
+### 2026-07-24 — Provider Accounting: HMRC-Ready Payout Statements via Stripe Connect
+
+The client asked for full provider-side accounting — transactions,
+bookings, and bookkeeping "keeping HMRC requirements in mind." Before
+this, credits had no £ value anywhere in the system and there was no
+concept of a provider being paid out at all — this had to be designed,
+not just implemented, so the scope was agreed with the client first:
+**real Stripe Connect payouts** (not just statements), a **platform
+commission** (not 100%-to-provider), **optional per-provider VAT
+registration**, and a **single fixed platform-wide £-per-credit rate**
+(not derived per parent plan). All four are recorded here because
+they're business decisions baked into the schema, not implementation
+details — changing any of them later is a real migration, not a
+config flag.
+
+**Built:**
+- **Schema** — `ProviderBusinessProfile` (legal name/address/VAT
+  registration — required before a payout statement can be generated
+  for that provider), `PlatformSettings` (a singleton row: credit
+  value in pence, commission rate %, platform VAT registration/rate —
+  admin-editable, changes only affect statements generated *after* the
+  change), `PayoutStatement` + `PayoutStatementLine` (the payout
+  document + its itemised bookings), `ProviderExpense` (self-logged
+  business expenses, categorized to match HMRC's SA103
+  self-employment categories). `User` gained
+  `stripeConnectAccountId`/`connectDetailsSubmitted`/
+  `connectPayoutsEnabled`. Every money/identity field on a
+  `PayoutStatement` is **snapshotted at generation time** (provider
+  legal name/address/VAT number, platform legal name/address/VAT
+  number, the commission rate and credit value in effect) rather than
+  joined live — an invoice is a legal record that must not silently
+  change if a provider edits their profile or an admin changes the
+  commission rate afterward. Statements are never deletable (no DELETE
+  route) — HMRC requires income records retained for at least 5 years
+  after the 31 January Self Assessment deadline they relate to, so the
+  absence of a delete endpoint is deliberate, not an oversight.
+- **Earning logic** (`src/services/payouts.ts`) — a booking becomes
+  "earned" (payable to the provider) once its status is `ATTENDED` or
+  `NO_SHOW`: both mean the credit was irreversibly spent and the
+  provider held the capacity, so both count, unlike
+  `CANCELLED`/`REJECTED` which were refunded and never earn anything.
+  `generatePayoutStatement({providerId, periodStart, periodEnd})`
+  finds every earned booking in the period not already claimed by an
+  earlier statement (`PayoutStatementLine.bookingId` is globally
+  unique — the DB itself prevents a booking ever being paid out
+  twice, not just the query), computes gross → commission → VAT on
+  commission (only if the platform is VAT-registered) → net, and
+  writes the statement + lines in one transaction with a sequential
+  human-readable number (`STMT-2026-000123`).
+- **Real payouts via Stripe Connect** (`src/lib/stripeConnect.ts`) —
+  Express accounts (Stripe's own hosted KYC/identity flow — this
+  platform never touches identity verification itself), created
+  lazily on first onboarding-link request. `payoutsEnabled`/
+  `detailsSubmitted` are never set directly by this app — they're
+  synced from Stripe's own `account.updated` webhook (new case added
+  to `src/routes/webhooks.ts`), since Stripe is the source of truth
+  for whether an account actually cleared onboarding.
+  `executePayoutStatement` transfers a `PENDING` statement's net
+  amount via `stripe.transfers.create` (the "separate charges and
+  transfers" Connect pattern — parents pay via subscriptions, an
+  unrelated flow, so there's no single originating charge per booking
+  to attach a destination charge to). A failed transfer sets the
+  statement to `FAILED` with the Stripe error message rather than
+  throwing — admin sees it inline and can retry, not a 500.
+- **Documents** (`src/lib/statementDocuments.ts`) — a PDF per
+  statement (via `pdfkit`, new dependency) doubling as both a
+  plain-English payout statement and, when the platform is
+  VAT-registered, the VAT invoice for the commission charged; a CSV
+  export per tax year for statements and for expenses. UK tax years
+  run 6 April–5 April, not the calendar year (`src/lib/taxYear.ts`).
+  **Found and fixed during manual verification**: the itemised table
+  and summary rows were built with pdfkit's `continued: true` across
+  columns at different x-offsets, which doesn't compose with per-column
+  `width` — a wrapped cell threw off every column after it, visibly
+  jumbling the table. Fixed by capturing one shared `y` per row and
+  rendering each cell as an independent, explicitly-positioned
+  `.text()` call, with row height computed from the tallest cell.
+- **Routes** — `src/routes/accounting.ts` (provider-facing: business
+  profile, Connect onboarding/status, statements + PDF/CSV downloads,
+  expenses CRUD + receipt upload reusing the `createImageUploader`
+  factory, a tax-year P&L summary) and a new `// --- Provider payouts
+  & accounting settings ---` section in `admin.ts` (settings CRUD,
+  generate one or "generate for all approved providers" — skips, not
+  fails, a provider with no eligible bookings or no business profile
+  yet — execute, list, detail).
+- **P&L summary** (`src/services/accountingSummary.ts`) — accruals
+  basis: gross income = statement `grossAmountGbp` for the tax year
+  (revenue recognized when the service was delivered, i.e. the
+  statement's period, not when Stripe transferred the money); platform
+  commission (+ VAT on it) is treated as an allowable business expense
+  alongside the provider's own logged `ProviderExpense` rows, mirroring
+  how a UK sole trader normally reports marketplace/gig-platform
+  income and the platform's own fee on a Self Assessment return.
+  Explicitly documented as a starting point, not tax advice.
+- **Frontend** — new provider pages `Accounting.tsx` (business profile
+  form, Connect status card, tax-year P&L cards, statement list with
+  PDF download) and `Expenses.tsx` (add/list/delete, receipt upload,
+  via the shared `Modal`), and `AdminPayouts.tsx` (platform settings,
+  generate one/all, statement list with an Execute action). Downloads
+  need the same auth header as any other API call, which a plain `<a
+  href>` can't send — added `apiDownload()`/`triggerBlobDownload()` to
+  `apiClient.ts` (fetch-as-blob with the existing 401-retry-once logic,
+  then a synthetic anchor click).
+
+**Verified:** 162 backend tests green (21 new — statement generation
+with exact gross/commission/VAT/net math computed from live settings
+rather than hardcoded, double-payout prevention across two generation
+runs, Connect-not-onboarded and non-PENDING execute rejections, a
+mocked Stripe transfer failure correctly landing as `FAILED` not a
+500, business-profile VAT-number validation, expense CRUD +
+ownership + receipt upload/delete), both builds clean. Real browser
+pass: saved a business profile end-to-end, added and listed an
+expense, loaded the admin settings/generate/statements page — zero
+console errors (the one 500 seen while manually clicking "Set up
+payouts" is the same documented placeholder-Stripe-key limitation as
+`seedPlans()`, not a code defect). Generated a real statement from
+actual demo-data bookings (Leicester Swim Academy, 12 credits → £30
+gross → £4.50 commission → £25.50 net) and downloaded + read the PDF
+twice — the second read is what caught the column-jumbling bug above;
+the third read, after the fix, showed a correctly aligned table and
+summary.

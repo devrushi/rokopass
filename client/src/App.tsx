@@ -8,6 +8,7 @@ import { AdminCharity } from "./pages/admin/AdminCharity";
 import { AdminChildren } from "./pages/admin/AdminChildren";
 import { AdminDashboard } from "./pages/admin/AdminDashboard";
 import { AdminParents } from "./pages/admin/AdminParents";
+import { AdminPayouts } from "./pages/admin/AdminPayouts";
 import { AdminPlans } from "./pages/admin/AdminPlans";
 import { PendingProviders } from "./pages/admin/PendingProviders";
 import { BillingReturn } from "./pages/BillingReturn";
@@ -22,9 +23,11 @@ import { Children } from "./pages/parent/Children";
 import { Invoices } from "./pages/parent/Invoices";
 import { MyBookings } from "./pages/parent/MyBookings";
 import { Plans } from "./pages/Plans";
+import { Accounting } from "./pages/provider/Accounting";
 import { ActivitiesList } from "./pages/provider/ActivitiesList";
 import { ActivityDetail } from "./pages/provider/ActivityDetail";
 import { ActivityForm } from "./pages/provider/ActivityForm";
+import { Expenses } from "./pages/provider/Expenses";
 import { ProviderDashboard } from "./pages/provider/ProviderDashboard";
 import { Roster } from "./pages/provider/Roster";
 import { Register } from "./pages/Register";
@@ -142,6 +145,22 @@ export default function App() {
           }
         />
         <Route
+          path="/provider/accounting"
+          element={
+            <ProtectedRoute roles={["PROVIDER"]}>
+              <Accounting />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/provider/expenses"
+          element={
+            <ProtectedRoute roles={["PROVIDER"]}>
+              <Expenses />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/billing/invoices"
           element={
             <ProtectedRoute roles={["PARENT"]}>
@@ -234,6 +253,14 @@ export default function App() {
           element={
             <ProtectedRoute roles={["ADMIN"]}>
               <AdminPlans />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/payouts"
+          element={
+            <ProtectedRoute roles={["ADMIN"]}>
+              <AdminPayouts />
             </ProtectedRoute>
           }
         />

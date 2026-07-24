@@ -69,9 +69,17 @@ export function Layout() {
                 </>
               )}
               {user.role === "PROVIDER" && (
-                <Link to="/provider/activities" onClick={() => setNavOpen(false)}>
-                  My Activities
-                </Link>
+                <>
+                  <Link to="/provider/activities" onClick={() => setNavOpen(false)}>
+                    My Activities
+                  </Link>
+                  <Link to="/provider/accounting" onClick={() => setNavOpen(false)}>
+                    Accounting
+                  </Link>
+                  <Link to="/provider/expenses" onClick={() => setNavOpen(false)}>
+                    Expenses
+                  </Link>
+                </>
               )}
               {(user.role === "PARENT" || user.role === "PROVIDER") && (
                 <Link to="/chat" onClick={() => setNavOpen(false)}>
@@ -103,6 +111,9 @@ export function Layout() {
                   </Link>
                   <Link to="/admin/charity" onClick={() => setNavOpen(false)}>
                     Charity
+                  </Link>
+                  <Link to="/admin/payouts" onClick={() => setNavOpen(false)}>
+                    Payouts
                   </Link>
                 </>
               )}

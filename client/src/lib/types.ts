@@ -294,6 +294,112 @@ export interface ProviderAnalytics {
   topActivities: { activityId: string; title: string; bookingsCount: number }[];
 }
 
+// --- Provider accounting / HMRC bookkeeping ---
+
+export interface BusinessProfile {
+  id: string;
+  legalBusinessName: string;
+  addressLine1: string;
+  addressLine2: string | null;
+  city: string;
+  postcode: string;
+  country: string;
+  utr: string | null;
+  isVatRegistered: boolean;
+  vatNumber: string | null;
+  vatRatePercent: number;
+}
+
+export interface ConnectStatus {
+  connected: boolean;
+  detailsSubmitted: boolean;
+  payoutsEnabled: boolean;
+}
+
+export type PayoutStatus = "PENDING" | "PAID" | "FAILED";
+
+export interface PayoutStatementLine {
+  id: string;
+  activityTitle: string;
+  sessionStartsAt: string;
+  childInitials: string;
+  creditsSpent: number;
+  amountGbp: number;
+}
+
+export interface PayoutStatement {
+  id: string;
+  statementNumber: string;
+  periodStart: string;
+  periodEnd: string;
+  creditsRedeemed: number;
+  creditValueGbpSnapshot: number;
+  grossAmountGbp: number;
+  commissionRatePercentSnapshot: number;
+  commissionAmountGbp: number;
+  commissionVatGbp: number;
+  netAmountGbp: number;
+  providerLegalName: string;
+  providerAddress: string;
+  providerVatNumber: string | null;
+  status: PayoutStatus;
+  stripeTransferId: string | null;
+  failureReason: string | null;
+  paidAt: string | null;
+  createdAt: string;
+  lines?: PayoutStatementLine[];
+}
+
+export interface AdminPayoutStatement extends PayoutStatement {
+  provider: { id: string; firstName: string; lastName: string; email: string };
+}
+
+export type ExpenseCategory =
+  | "COST_OF_GOODS"
+  | "CAR_VAN_TRAVEL"
+  | "STAFF_WAGES"
+  | "RENT_RATES_UTILITIES"
+  | "REPAIRS_MAINTENANCE"
+  | "ADVERTISING_MARKETING"
+  | "LEGAL_PROFESSIONAL"
+  | "OFFICE_ADMIN"
+  | "OTHER";
+
+export interface ProviderExpense {
+  id: string;
+  category: ExpenseCategory;
+  description: string;
+  amountGbp: number;
+  incurredOn: string;
+  receiptUrl: string | null;
+  createdAt: string;
+}
+
+export interface TaxYearSummary {
+  taxYear: number;
+  periodStart: string;
+  periodEnd: string;
+  statementCount: number;
+  grossIncomeGbp: number;
+  platformFeesGbp: number;
+  otherExpensesGbp: number;
+  totalExpensesGbp: number;
+  netProfitGbp: number;
+  netPaidOutGbp: number;
+  expensesByCategory: { category: ExpenseCategory; amountGbp: number }[];
+}
+
+export interface PlatformSettings {
+  id: string;
+  creditValueGbp: number;
+  commissionRatePercent: number;
+  platformLegalName: string;
+  platformAddress: string;
+  platformVatRegistered: boolean;
+  platformVatNumber: string | null;
+  platformVatRatePercent: number;
+}
+
 export interface AdminAnalytics {
   users: { parents: number; providers: number; admins: number };
   newSignupsLast30Days: { parents: number; providers: number };

@@ -11,8 +11,10 @@ import multer from "multer";
 export const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
 const ACTIVITY_MEDIA_DIR = path.join(UPLOAD_ROOT, "activities");
 const CHILD_PHOTO_DIR = path.join(UPLOAD_ROOT, "children");
+const EXPENSE_RECEIPT_DIR = path.join(UPLOAD_ROOT, "receipts");
 fs.mkdirSync(ACTIVITY_MEDIA_DIR, { recursive: true });
 fs.mkdirSync(CHILD_PHOTO_DIR, { recursive: true });
+fs.mkdirSync(EXPENSE_RECEIPT_DIR, { recursive: true });
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -65,4 +67,14 @@ export function childPhotoPublicUrl(filename: string): string {
 
 export function deleteChildPhotoFile(url: string): void {
   deleteFile(CHILD_PHOTO_DIR, url);
+}
+
+export const expenseReceiptUpload = createImageUploader(EXPENSE_RECEIPT_DIR);
+
+export function expenseReceiptPublicUrl(filename: string): string {
+  return `/uploads/receipts/${filename}`;
+}
+
+export function deleteExpenseReceiptFile(url: string): void {
+  deleteFile(EXPENSE_RECEIPT_DIR, url);
 }

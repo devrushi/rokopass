@@ -20,6 +20,14 @@ import { getAdminInsights } from "../services/aiInsights";
 import { getAdminAnalytics } from "../services/analytics";
 import { grantCharityCredits, getCharityPoolStats } from "../services/charity";
 import { grantSchema } from "../schemas/charity";
+import {
+  adminStatementSearchSchema,
+  generatePayoutSchema,
+  generatePayoutsForAllSchema,
+  platformSettingsUpdateSchema,
+} from "../schemas/accounting";
+import { getPlatformSettings, updatePlatformSettings } from "../services/platformSettings";
+import { executePayoutStatement, generatePayoutStatement, loadOwnedStatement } from "../services/payouts";
 
 export const adminRouter = Router();
 
@@ -508,6 +516,128 @@ adminRouter.post("/charity/grant", async (req, res, next) => {
       amount: parsed.data.amount,
     });
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Provider payouts & accounting settings ---
+
+adminRouter.get("/payouts/settings", async (_req, res, next) => {
+  try {
+    const settings = await getPlatformSettings();
+    res.json({ settings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.patch("/payouts/settings", async (req, res, next) => {
+  try {
+    const parsed = platformSettingsUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(parsed.error.issues[0]?.message ?? "Invalid settings", 400);
+    }
+    const settings = await updatePlatformSettings(parsed.data);
+    res.json({ settings });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.get("/payouts", async (req, res, next) => {
+  try {
+    const parsed = adminStatementSearchSchema.safeParse(req.query);
+    if (!parsed.success) {
+      throw new AppError(parsed.error.issues[0]?.message ?? "Invalid query", 400);
+    }
+    const { providerId, status, page, limit } = parsed.data;
+
+    const where = {
+      ...(providerId ? { providerId } : {}),
+      ...(status ? { status } : {}),
+    };
+
+    const [statements, total] = await Promise.all([
+      prisma.payoutStatement.findMany({
+        where,
+        include: { provider: { select: { id: true, firstName: true, lastName: true, email: true } } },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.payoutStatement.count({ where }),
+    ]);
+
+    res.json({ statements, total, page, limit });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.get("/payouts/:id", async (req, res, next) => {
+  try {
+    const statement = await loadOwnedStatement(param(req.params.id), req.user!.sub, "ADMIN");
+    res.json({ statement });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.post("/payouts/generate", async (req, res, next) => {
+  try {
+    const parsed = generatePayoutSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(parsed.error.issues[0]?.message ?? "Invalid request", 400);
+    }
+    const statement = await generatePayoutStatement(parsed.data);
+    res.status(201).json({ statement });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Runs generatePayoutStatement across every approved provider, skipping (not failing) any
+// provider with no eligible bookings or no business profile yet — a bulk "close out the month"
+// action, not an all-or-nothing batch.
+adminRouter.post("/payouts/generate-all", async (req, res, next) => {
+  try {
+    const parsed = generatePayoutsForAllSchema.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(parsed.error.issues[0]?.message ?? "Invalid request", 400);
+    }
+    const { periodStart, periodEnd } = parsed.data;
+
+    const providers = await prisma.user.findMany({
+      where: { role: "PROVIDER", verificationStatus: "APPROVED" },
+      select: { id: true },
+    });
+
+    const generated: Awaited<ReturnType<typeof generatePayoutStatement>>[] = [];
+    const skipped: { providerId: string; reason: string }[] = [];
+
+    for (const provider of providers) {
+      try {
+        const statement = await generatePayoutStatement({ providerId: provider.id, periodStart, periodEnd });
+        generated.push(statement);
+      } catch (err) {
+        skipped.push({
+          providerId: provider.id,
+          reason: err instanceof AppError ? err.message : "Unknown error",
+        });
+      }
+    }
+
+    res.status(201).json({ generated, skipped });
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.post("/payouts/:id/execute", async (req, res, next) => {
+  try {
+    const statement = await executePayoutStatement(param(req.params.id));
+    res.json({ statement });
   } catch (err) {
     next(err);
   }
