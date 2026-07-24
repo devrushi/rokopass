@@ -11,7 +11,10 @@ export function Layout() {
     <div className="layout">
       <header className="layout__header">
         <Link to="/" className="layout__brand" onClick={() => setNavOpen(false)}>
-          RokidsPass
+          <span className="layout__brand-badge">Ro</span>
+          <span>
+            kids<strong>Pass</strong>
+          </span>
         </Link>
 
         <button
@@ -119,7 +122,7 @@ export function Layout() {
               <Link to="/login" onClick={() => setNavOpen(false)}>
                 Log in
               </Link>
-              <Link to="/register" onClick={() => setNavOpen(false)}>
+              <Link to="/register" className="button" onClick={() => setNavOpen(false)}>
                 Sign up
               </Link>
             </>
@@ -130,6 +133,13 @@ export function Layout() {
       <main className="layout__main">
         <Outlet />
       </main>
+
+      <footer className="layout__footer">
+        <span>
+          <span className="layout__brand-badge">Ro</span> kids<strong>Pass</strong>
+        </span>
+        <span className="layout__footer-tag">A credit-based subscription for children's activities in Leicester.</span>
+      </footer>
     </div>
   );
 }

@@ -1,12 +1,24 @@
+/* Brand palette matches roshelia.co.uk / the RoKidsPass marketing site — warm cream surfaces,
+   deep-teal ink, green as the primary action color, cyan/amber as secondary accents. Dark mode
+   reuses the site's own dark-teal sections (nav/footer/CTA band) rather than an invented theme,
+   since that's already part of the same brand's palette. */
 :root {
-  --text: #1f2933;
-  --text-muted: #6b7280;
-  --bg: #ffffff;
-  --border: #e2e2e2;
-  --accent: #7c3aed;
+  --bg: #f5f1ea;
+  --surface: #ffffff;
+  --surface-alt: #efe9de;
+  --text: #0e1417;
+  --text-muted: #384851;
+  --border: #e3dcc9;
+  --accent: #1d9e75;
+  --accent-hover: #14704f;
+  --accent-soft: rgba(29, 158, 117, 0.12);
+  --ink: #002733;
+  --ink-2: #004e66;
+  --cyan: #0091b8;
+  --amber: #b2852f;
   --danger: #dc2626;
 
-  font: 16px/1.5 system-ui, "Segoe UI", Roboto, sans-serif;
+  font: 16px/1.5 Inter, system-ui, "Segoe UI", Roboto, sans-serif;
   color-scheme: light dark;
   color: var(--text);
   background: var(--bg);
@@ -17,11 +29,17 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #f3f4f6;
-    --text-muted: #9ca3af;
-    --bg: #16171d;
-    --border: #2e303a;
-    --accent: #c084fc;
+    --bg: #002733;
+    --surface: #0b3b4a;
+    --surface-alt: #004e66;
+    --text: #f5f1ea;
+    --text-muted: rgba(245, 241, 234, 0.7);
+    --border: rgba(255, 255, 255, 0.16);
+    --accent: #22b583;
+    --accent-hover: #3fd6a1;
+    --accent-soft: rgba(34, 181, 131, 0.18);
+    --cyan: #6fe3f5;
+    --amber: #f4c77a;
   }
 }
 
@@ -42,6 +60,21 @@ h1,
 h2,
 h3 {
   margin: 0 0 0.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink, var(--text));
+}
+
+@media (prefers-color-scheme: dark) {
+  h1,
+  h2,
+  h3 {
+    color: var(--text);
+  }
+}
+
+a {
+  color: var(--accent);
 }
 
 .page-status {
@@ -49,16 +82,27 @@ h3 {
 }
 
 .button {
-  display: inline-block;
-  padding: 0.5rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 1.4rem;
   border: none;
-  border-radius: 6px;
+  border-radius: 999px;
   background: var(--accent);
   color: #fff;
   font: inherit;
   font-weight: 600;
   text-decoration: none;
   cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .button:disabled {
@@ -69,11 +113,20 @@ h3 {
 .button--secondary {
   background: transparent;
   border: 1px solid var(--border);
-  color: inherit;
+  color: var(--text);
+}
+
+.button--secondary:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .button--danger {
   background: var(--danger);
+}
+
+.button--danger:hover:not(:disabled) {
+  background: #b91c1c;
 }
 
 .form__error {

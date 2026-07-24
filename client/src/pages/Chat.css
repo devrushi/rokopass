@@ -6,14 +6,15 @@
   max-height: 50vh;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 16px;
+  background: var(--surface);
   padding: 1rem;
 }
 
 .chat-message {
   max-width: 75%;
-  padding: 0.6rem 0.85rem;
-  border-radius: 10px;
+  padding: 0.6rem 0.9rem;
+  border-radius: 14px;
   font-size: 0.9rem;
   line-height: 1.45;
   white-space: pre-wrap;
@@ -23,12 +24,13 @@
   align-self: flex-end;
   background: var(--accent);
   color: #fff;
+  border-bottom-right-radius: 4px;
 }
 
 .chat-message--assistant {
   align-self: flex-start;
-  background: var(--surface, rgba(127, 127, 127, 0.12));
-  border: 1px solid var(--border);
+  background: var(--surface-alt, rgba(127, 127, 127, 0.12));
+  border-bottom-left-radius: 4px;
 }
 
 .chat-message--pending {
@@ -43,10 +45,15 @@
 
 .chat-form input {
   flex: 1;
-  padding: 0.5rem 0.6rem;
+  padding: 0.55rem 0.85rem;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: 999px;
+  background: var(--surface);
   color: inherit;
   font: inherit;
+}
+
+.chat-form input:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
 }

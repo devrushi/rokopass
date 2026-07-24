@@ -7,8 +7,9 @@
 
 .plan-card {
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1.25rem;
+  border-radius: 18px;
+  background: var(--surface);
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -21,6 +22,7 @@
 .plan-card__price {
   font-size: 1.5rem;
   font-weight: 700;
+  color: var(--accent);
   margin: 0;
 }
 

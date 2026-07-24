@@ -1,6 +1,7 @@
 .dashboard__card {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 16px;
+  background: var(--surface);
   padding: 1.25rem 1.5rem;
   max-width: 420px;
   width: 100%;

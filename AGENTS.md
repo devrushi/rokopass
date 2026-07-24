@@ -1276,3 +1276,60 @@ logged back in as that school → the provider directory listed the seeded
 demo provider (correctly flagging "No DBS certificate on file") →
 approved that provider, which immediately showed "Approved for our
 school" on reload. Zero console errors across every step.
+
+### 2026-07-24 — Visual Redesign to Match roshelia.co.uk / RoKidsPass Brand
+
+RokidsPass turned out to be more than a similarly-named sibling project —
+roshelia.co.uk is the actual pre-launch marketing site for this exact
+product ("RoKidsPass", by Roshelia Ltd, "Coming September 2026"). Rather
+than guess at a look, fetched the live site with Playwright and read its
+computed styles directly (colors, font, button shapes) instead of
+eyeballing a screenshot — the palette below is transcribed from their
+CSS, not approximated.
+
+**Palette (now in `index.css` as CSS variables):**
+- Light mode: warm cream page background (`#F5F1EA`), white card
+  surfaces, deep-teal ink for headings/dark surfaces (`#002733`), green
+  as the one primary action color (`#1D9E75`), cyan/amber as minor
+  accents. This is a direct read of the site's own light-section colors.
+- Dark mode: rather than invent a separate dark theme, reused the site's
+  **own dark sections** (its nav bar, footer, and CTA band are already
+  dark teal) as the dark-mode palette — `--bg` becomes the same
+  `#002733` ink, text becomes the same warm cream. Both light and dark
+  mode are genuinely "the brand," not a generic light theme plus a
+  bolted-on inverted dark theme.
+- Typography switched to Inter (the site's font, loaded via Google Fonts
+  in `index.html`) from the previous system-font stack.
+- Buttons/badges/inputs went pill-shaped (`border-radius: 999px` on
+  buttons, matching the reference exactly) and cards moved from an 8px
+  radius to 14-20px, matching the site's rounder, softer shapes.
+
+**Built:**
+- Rewrote all 8 of the app's CSS files (`index.css`, `Layout.css`,
+  `provider.css`, `AuthForm.css`, `Dashboard.css`, `Plans.css`,
+  `Chat.css`, `booking.css`) plus `analytics.css`'s non-data-encoding
+  chrome — the dataviz skill's validated status/sequential chart colors
+  (`--viz-status-*`, `--viz-sequential`) were deliberately left
+  untouched, since those are colorblind-safety-validated data encodings,
+  not brand chrome, and re-deriving them wasn't asked for or warranted.
+- New favicon (`Ro` monogram on a dark-teal rounded square, matching the
+  site's own header badge) and a split-color wordmark in `Layout.tsx`
+  (`Ro` badge + "kids**Pass**", **Pass** in the cyan accent) replacing
+  the plain "RokidsPass" text logo. Added a matching footer with the
+  same wordmark, present on every page via `Layout.tsx` (not previously
+  there at all).
+- This was a low-risk redesign specifically *because* the whole app
+  already ran through a small, disciplined set of shared CSS classes
+  (`.button`, `.form`, `.activity-card`, `.provider-page`, etc.) rather
+  than bespoke per-page styles — 8 files, under 700 lines total, and the
+  new look cascaded across every page (three dashboards, auth, browse,
+  chat, admin tools, school directory) without touching any component's
+  JSX/logic except `Layout.tsx`'s wordmark markup.
+
+**Verified:** both builds clean, all 135 backend tests still green (CSS-
+only change, as expected — included as a sanity check, not because
+regression was likely). Screenshotted every major page in both light and
+dark mode in a real browser: login/register, all three original
+dashboards, the school directory, browse, and plans — zero console
+errors anywhere. Side-by-side against the reference site, the palette,
+button shapes, and wordmark now genuinely read as the same product.
