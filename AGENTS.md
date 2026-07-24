@@ -1434,3 +1434,66 @@ clean. Real browser pass: Browse's card grid, the provider's own
 activities grid, and an activity detail page's "Meet the team" section
 all render real photos and avatars with zero console errors — visually
 near-identical to the reference site's own activity cards.
+
+### 2026-07-24 — Donate/Grant Modals, Leaderboard Cards + Kid Photos, Browse Category Filter
+
+Five small client-requested polish items, all touching existing
+features rather than adding new ones: turn two inline forms into
+modals, bring the leaderboard's visual language in line with the
+activity cards, let parents add a photo per child, and add a category
+filter to Browse.
+
+**Built:**
+- New shared `Modal` component (`client/src/components/Modal.tsx` +
+  `Modal.css`) — fixed backdrop, `role="dialog"`, `Escape`-to-close,
+  click-outside-to-close. Used by both of the modal conversions below
+  so the overlay/keyboard/focus behavior isn't duplicated.
+- **Donate as a modal** — `CommunityFund.tsx` (the parent dashboard's
+  donate widget) now shows pool stats + a "Donate" button that opens
+  the amount-input form in a `Modal`; confirmed parent-only structurally
+  since this component is only ever imported by the PARENT-only
+  `Dashboard.tsx` route, no new gating needed.
+- **Grant as a modal** — `AdminCharity.tsx`'s "Grant credits to a
+  family" section is the same pattern: a button opens a `Modal`
+  containing the parent-email + amount form.
+- **Child photos** — `Child.photoUrl` (nullable) added via migration;
+  `src/lib/upload.ts` refactored from one activity-media-specific
+  multer config into a `createImageUploader(dir)` factory, reused for
+  a new `POST/DELETE /children/:id/photo` pair (owner-only, same
+  ownership-check pattern as the rest of `children.ts`). "My Children"
+  (`Children.tsx`) gained an "Add/Change/Remove photo" control per
+  child, falling back to an initial-letter avatar when no photo is
+  set.
+- **Leaderboard cards** — `Leaderboard.tsx` rewritten to render the
+  same `.browse-card` markup/CSS the activity cards use (image area
+  with badges, body with title/tag pills), so it's visually consistent
+  with Browse rather than a plain list. Shows the child's photo when
+  set, otherwise a rank-colored gradient with a medal/rosette emoji.
+  `getLeaderboard()` now selects and returns `photoUrl` per entry.
+  `prisma/demo-assets.ts` gained `generateKidPhoto()` (same local-SVG
+  approach as activity/staff photos — a colored avatar with a kid
+  emoji) and `seed-demo.ts` assigns one to every seeded child that
+  doesn't already have one, so the leaderboard and Children page have
+  real-looking photos out of the box for a pitch demo.
+- **Browse category filter** — a row of pill/chip buttons ("All",
+  "Swimming", "Football", …, matching `ActivityForm.tsx`'s existing
+  category list) above the SEND-friendly checkbox on `Browse.tsx`.
+  `GET /activities` accepts an optional `?category=` query param,
+  additive to the existing `isActive`/`isFlagged`/`isSendFriendly`
+  filtering.
+
+**Fixed along the way:** the leaderboard's "N classes" badge read "1
+classes" for a single-class entry — made singular/plural-aware
+(`class` vs `classes`).
+
+**Verified:** 141 backend tests green (added one new
+`tests/childPhoto.test.ts` covering upload/replace/delete/ownership,
+and one new "filters by category" case in `tests/activities.test.ts`),
+both client and server builds clean. Real browser pass across both
+roles (parent + admin) confirmed: the donate modal opens and submits
+successfully; the grant modal opens on the admin Community Fund page;
+the leaderboard renders card-style entries with photos/fallback medals
+and correct singular/plural class counts; My Children shows photo
+upload/change/remove controls working end-to-end; Browse's category
+chips correctly filter results (e.g. selecting "Football" hides
+non-football activities) — zero console errors in any of these flows.

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { param } from "../lib/requestParams";
 import { prisma } from "../lib/prisma";
+import { childPhotoPublicUrl, childPhotoUpload, deleteChildPhotoFile } from "../lib/upload";
 import { AppError } from "../middleware/errorHandler";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireRole } from "../middleware/requireRole";
@@ -53,6 +54,64 @@ childrenRouter.patch("/:id", requireAuth, requireRole("PARENT", "ADMIN"), async 
     }
 
     const updated = await prisma.child.update({ where: { id: child.id }, data: parsed.data });
+    res.json({ child: updated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+async function loadOwnedChild(childId: string, userId: string, role: string) {
+  const child = await prisma.child.findUnique({ where: { id: childId } });
+  if (!child) {
+    throw new AppError("Child not found", 404);
+  }
+  if (role !== "ADMIN" && child.parentId !== userId) {
+    throw new AppError("You do not have permission to modify this child", 403);
+  }
+  return child;
+}
+
+childrenRouter.post("/:id/photo", requireAuth, requireRole("PARENT", "ADMIN"), (req, res, next) => {
+  const childId = param(req.params.id);
+
+  loadOwnedChild(childId, req.user!.sub, req.user!.role)
+    .then((child) => {
+      childPhotoUpload.single("file")(req, res, async (uploadErr) => {
+        try {
+          if (uploadErr) {
+            throw new AppError(uploadErr.message || "Upload failed", 400);
+          }
+          if (!req.file) {
+            throw new AppError("No file uploaded", 400);
+          }
+
+          // Replacing an existing photo — remove the old file so uploads/ doesn't accumulate
+          // orphaned images every time a parent changes their child's photo.
+          if (child.photoUrl) {
+            deleteChildPhotoFile(child.photoUrl);
+          }
+
+          const updated = await prisma.child.update({
+            where: { id: childId },
+            data: { photoUrl: childPhotoPublicUrl(req.file.filename) },
+          });
+
+          res.json({ child: updated });
+        } catch (err) {
+          next(err);
+        }
+      });
+    })
+    .catch(next);
+});
+
+childrenRouter.delete("/:id/photo", requireAuth, requireRole("PARENT", "ADMIN"), async (req, res, next) => {
+  try {
+    const child = await loadOwnedChild(param(req.params.id), req.user!.sub, req.user!.role);
+    if (child.photoUrl) {
+      deleteChildPhotoFile(child.photoUrl);
+    }
+    const updated = await prisma.child.update({ where: { id: child.id }, data: { photoUrl: null } });
     res.json({ child: updated });
   } catch (err) {
     next(err);

@@ -7,6 +7,43 @@
   gap: 1.25rem;
 }
 
+.category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 9px 18px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.chip:hover {
+  border-color: var(--ink-2);
+}
+
+.chip--active {
+  background: var(--ink-2);
+  border-color: var(--ink-2);
+  color: #fff;
+}
+
+.chip--active:hover {
+  border-color: var(--ink-2);
+}
+
 .browse-card {
   display: flex;
   flex-direction: column;
@@ -42,6 +79,14 @@
   width: 100%;
   height: 100%;
   background: linear-gradient(135deg, var(--cyan), var(--ink));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3.5rem;
+}
+
+.browse-card__image-fallback--leaderboard {
+  background: linear-gradient(135deg, var(--amber), var(--ink));
 }
 
 .browse-card__age-badge {

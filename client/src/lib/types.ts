@@ -110,11 +110,13 @@ export interface Child {
   dateOfBirth: string;
   allergyInfo: string | null;
   isOnLeaderboard: boolean;
+  photoUrl: string | null;
 }
 
 export interface LeaderboardEntry {
   displayName: string;
   attendedCount: number;
+  photoUrl: string | null;
 }
 
 export type BookingStatus =

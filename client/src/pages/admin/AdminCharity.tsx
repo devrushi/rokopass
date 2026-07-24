@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
+import { Modal } from "../../components/Modal";
 import { StatRow, StatTile } from "../../components/analytics/StatTile";
 import { apiRequest, ApiError } from "../../lib/apiClient";
 import type { CharityPoolStats } from "../../lib/types";
@@ -11,6 +12,7 @@ export function AdminCharity() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [isGranting, setIsGranting] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   function load() {
     apiRequest<CharityPoolStats>("/admin/charity")
@@ -20,16 +22,22 @@ export function AdminCharity() {
 
   useEffect(load, []);
 
+  function openModal() {
+    setError(null);
+    setMessage(null);
+    setEmail("");
+    setAmount("1");
+    setIsModalOpen(true);
+  }
+
   async function handleGrant(event: FormEvent) {
     event.preventDefault();
     setError(null);
-    setMessage(null);
     setIsGranting(true);
     try {
       await apiRequest("/admin/charity/grant", { method: "POST", body: { email, amount: Number(amount) } });
+      setIsModalOpen(false);
       setMessage(`Granted ${amount} credits to ${email}.`);
-      setEmail("");
-      setAmount("1");
       load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to grant credits");
@@ -59,31 +67,9 @@ export function AdminCharity() {
               Redistributes credits from the community fund to a parent's account — for families
               who need help affording activities.
             </p>
-            <form className="form-row" onSubmit={handleGrant} style={{ alignItems: "flex-end" }}>
-              <label style={{ flex: 2 }}>
-                Parent email
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="parent@example.com"
-                  required
-                />
-              </label>
-              <label>
-                Credits
-                <input
-                  type="number"
-                  min={1}
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  style={{ width: "6rem" }}
-                />
-              </label>
-              <button type="submit" className="button" disabled={isGranting}>
-                {isGranting ? "Granting…" : "Grant"}
-              </button>
-            </form>
+            <button type="button" className="button" onClick={openModal}>
+              Grant credits
+            </button>
             {message && <p className="page-status">{message}</p>}
           </section>
 
@@ -125,6 +111,32 @@ export function AdminCharity() {
             )}
           </section>
         </>
+      )}
+
+      {isModalOpen && (
+        <Modal title="Grant credits to a family" onClose={() => setIsModalOpen(false)}>
+          <form className="form" onSubmit={handleGrant}>
+            <label>
+              Parent email
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="parent@example.com"
+                autoFocus
+                required
+              />
+            </label>
+            <label>
+              Credits
+              <input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </label>
+            {error && <p className="form__error">{error}</p>}
+            <button type="submit" className="button" disabled={isGranting}>
+              {isGranting ? "Granting…" : "Confirm grant"}
+            </button>
+          </form>
+        </Modal>
       )}
     </div>
   );

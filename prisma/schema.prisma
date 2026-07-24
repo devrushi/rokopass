@@ -204,6 +204,10 @@ model Child {
   // Opt-in, default false — a child only appears on the leaderboard if a parent explicitly
   // turns this on, and even then only as "Firstname L." (see src/services/leaderboard.ts).
   isOnLeaderboard Boolean @default(false)
+  // Optional, parent-uploaded — same local-disk seam as activity/staff photos (see
+  // src/lib/upload.ts). Only ever shown to the child's own parent and, if isOnLeaderboard is
+  // also on, on the leaderboard alongside the same "Firstname L." pseudonym — never full name.
+  photoUrl String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

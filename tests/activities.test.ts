@@ -173,6 +173,21 @@ describe("GET /activities", () => {
       expect(activity.providerId).toBe(providerId);
     }
   });
+
+  it("filters by category", async () => {
+    const createRes = await request(app)
+      .post("/activities")
+      .set("Authorization", `Bearer ${providerToken}`)
+      .send({ ...validActivity(), title: "Category Filter Football Test", category: "Football" });
+    const footballId = createRes.body.activity.id as string;
+
+    const res = await request(app).get("/activities?category=Football");
+    expect(res.status).toBe(200);
+    expect(res.body.activities.some((a: { id: string }) => a.id === footballId)).toBe(true);
+    for (const activity of res.body.activities) {
+      expect(activity.category).toBe("Football");
+    }
+  });
 });
 
 describe("recurring schedules and sessions", () => {

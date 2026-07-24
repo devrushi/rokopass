@@ -17,7 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { prisma } from "../src/lib/prisma";
 import { hashPassword } from "../src/lib/password";
-import { generateActivityPhoto, generateStaffAvatar } from "./demo-assets";
+import { generateActivityPhoto, generateKidPhoto, generateStaffAvatar } from "./demo-assets";
 
 const DEMO_PASSWORD = "PitchDemo123";
 const DAY_MS = 24 * 60 * 60_000;
@@ -566,6 +566,7 @@ async function seedMedia() {
 }
 
 async function seedChildren() {
+  let photoIndex = 0;
   for (const p of PARENTS) {
     const parent = await prisma.user.findUniqueOrThrow({ where: { email: p.email } });
     for (const c of p.children) {
@@ -581,7 +582,13 @@ async function seedChildren() {
       if (existing) {
         await prisma.child.update({
           where: { id: existing.id },
-          data: { allergyInfo: c.allergyInfo ?? null, isOnLeaderboard: c.isOnLeaderboard ?? false },
+          data: {
+            allergyInfo: c.allergyInfo ?? null,
+            isOnLeaderboard: c.isOnLeaderboard ?? false,
+            // Only generate a photo if this child doesn't already have one — keeps re-runs from
+            // needlessly regenerating/orphaning files for children that already look fine.
+            photoUrl: existing.photoUrl ?? generateKidPhoto(photoIndex),
+          },
         });
       } else {
         await prisma.child.create({
@@ -592,12 +599,14 @@ async function seedChildren() {
             dateOfBirth,
             allergyInfo: c.allergyInfo,
             isOnLeaderboard: c.isOnLeaderboard ?? false,
+            photoUrl: generateKidPhoto(photoIndex),
           },
         });
       }
+      photoIndex += 1;
     }
   }
-  console.log("Seeded children.");
+  console.log("Seeded children with photos.");
 }
 
 /** Clears prior demo bookings/credit history so re-running this script doesn't pile up duplicates. */

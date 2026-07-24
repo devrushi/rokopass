@@ -54,6 +54,24 @@ a.activity-card:hover {
   flex-shrink: 0;
 }
 
+.activity-card__thumb--round {
+  border-radius: 999px;
+}
+
+.child-avatar-placeholder {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-hover);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+
 .form {
   max-width: 480px;
   display: flex;

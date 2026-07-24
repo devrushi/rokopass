@@ -29,12 +29,14 @@ async function loadOwnedActivity(activityId: string, userId: string, role: strin
 activitiesRouter.get("/", async (req, res, next) => {
   try {
     const sendFriendly = req.query.sendFriendly === "true";
+    const category = typeof req.query.category === "string" ? req.query.category : undefined;
 
     const activities = await prisma.activity.findMany({
       where: {
         isActive: true,
         isFlagged: false,
         ...(sendFriendly ? { isSendFriendly: true } : {}),
+        ...(category ? { category } : {}),
         // Public listing only shows activities from verified providers (or admin-created ones,
         // which have no verificationStatus to check). Providers still see their own pending
         // activities via GET /activities/mine while awaiting approval — this only hides them

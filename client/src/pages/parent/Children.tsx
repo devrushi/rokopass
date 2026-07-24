@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { apiRequest, ApiError } from "../../lib/apiClient";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { apiAssetUrl, apiRequest, ApiError } from "../../lib/apiClient";
 import type { Child } from "../../lib/types";
 import "../provider/provider.css";
 
@@ -17,6 +17,8 @@ export function Children() {
   const [editError, setEditError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [togglingLeaderboardId, setTogglingLeaderboardId] = useState<string | null>(null);
+  const [uploadingPhotoId, setUploadingPhotoId] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   function load() {
     apiRequest<{ children: Child[] }>("/children/mine")
@@ -87,9 +89,43 @@ export function Children() {
     }
   }
 
+  async function handlePhotoSelected(event: ChangeEvent<HTMLInputElement>, childId: string) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setPhotoError(null);
+    setUploadingPhotoId(childId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      await apiRequest(`/children/${childId}/photo`, { method: "POST", body: formData });
+      load();
+    } catch (err) {
+      setPhotoError(err instanceof ApiError ? err.message : "Failed to upload photo");
+    } finally {
+      setUploadingPhotoId(null);
+    }
+  }
+
+  async function removePhoto(childId: string) {
+    setPhotoError(null);
+    setUploadingPhotoId(childId);
+    try {
+      await apiRequest(`/children/${childId}/photo`, { method: "DELETE" });
+      load();
+    } catch (err) {
+      setPhotoError(err instanceof ApiError ? err.message : "Failed to remove photo");
+    } finally {
+      setUploadingPhotoId(null);
+    }
+  }
+
   return (
     <div className="provider-page">
       <h1>My children</h1>
+
+      {photoError && <p className="form__error">{photoError}</p>}
 
       {children && children.length > 0 && (
         <ul className="activity-list">
@@ -127,6 +163,17 @@ export function Children() {
               </li>
             ) : (
               <li key={child.id} className="activity-card">
+                {child.photoUrl ? (
+                  <img
+                    src={apiAssetUrl(child.photoUrl)}
+                    alt=""
+                    className="activity-card__thumb activity-card__thumb--round"
+                  />
+                ) : (
+                  <div className="child-avatar-placeholder" aria-hidden="true">
+                    {child.firstName.charAt(0).toUpperCase()}
+                  </div>
+                )}
                 <div>
                   <strong>
                     {child.firstName} {child.lastName}
@@ -138,6 +185,26 @@ export function Children() {
                   </div>
                 </div>
                 <div className="session-row__actions">
+                  <label className="button button--secondary">
+                    {uploadingPhotoId === child.id ? "Uploading…" : child.photoUrl ? "Change photo" : "Add photo"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      hidden
+                      disabled={uploadingPhotoId === child.id}
+                      onChange={(e) => handlePhotoSelected(e, child.id)}
+                    />
+                  </label>
+                  {child.photoUrl && (
+                    <button
+                      type="button"
+                      className="button button--secondary"
+                      disabled={uploadingPhotoId === child.id}
+                      onClick={() => removePhoto(child.id)}
+                    >
+                      Remove photo
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="button button--secondary"

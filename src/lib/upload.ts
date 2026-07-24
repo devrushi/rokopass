@@ -10,39 +10,59 @@ import multer from "multer";
 // from src/ (tsx) and dist/ (compiled) — both are always invoked from the project root.
 export const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
 const ACTIVITY_MEDIA_DIR = path.join(UPLOAD_ROOT, "activities");
+const CHILD_PHOTO_DIR = path.join(UPLOAD_ROOT, "children");
 fs.mkdirSync(ACTIVITY_MEDIA_DIR, { recursive: true });
+fs.mkdirSync(CHILD_PHOTO_DIR, { recursive: true });
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, ACTIVITY_MEDIA_DIR),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `${crypto.randomUUID()}${ext}`);
-  },
-});
+function createImageUploader(dir: string) {
+  const storage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, dir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase();
+      cb(null, `${crypto.randomUUID()}${ext}`);
+    },
+  });
 
-export const activityMediaUpload = multer({
-  storage,
-  limits: { fileSize: MAX_FILE_SIZE_BYTES },
-  fileFilter: (_req, file, cb) => {
-    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      cb(new Error("Only JPEG, PNG, or WEBP images are allowed"));
-      return;
-    }
-    cb(null, true);
-  },
-});
+  return multer({
+    storage,
+    limits: { fileSize: MAX_FILE_SIZE_BYTES },
+    fileFilter: (_req, file, cb) => {
+      if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+        cb(new Error("Only JPEG, PNG, or WEBP images are allowed"));
+        return;
+      }
+      cb(null, true);
+    },
+  });
+}
+
+function deleteFile(dir: string, url: string): void {
+  const filename = path.basename(url);
+  const filePath = path.join(dir, filename);
+  fs.rm(filePath, { force: true }, (err) => {
+    if (err) console.error("Failed to delete uploaded file", filePath, err);
+  });
+}
+
+export const activityMediaUpload = createImageUploader(ACTIVITY_MEDIA_DIR);
 
 export function activityMediaPublicUrl(filename: string): string {
   return `/uploads/activities/${filename}`;
 }
 
 export function deleteActivityMediaFile(url: string): void {
-  const filename = path.basename(url);
-  const filePath = path.join(ACTIVITY_MEDIA_DIR, filename);
-  fs.rm(filePath, { force: true }, (err) => {
-    if (err) console.error("Failed to delete uploaded media file", filePath, err);
-  });
+  deleteFile(ACTIVITY_MEDIA_DIR, url);
+}
+
+export const childPhotoUpload = createImageUploader(CHILD_PHOTO_DIR);
+
+export function childPhotoPublicUrl(filename: string): string {
+  return `/uploads/children/${filename}`;
+}
+
+export function deleteChildPhotoFile(url: string): void {
+  deleteFile(CHILD_PHOTO_DIR, url);
 }
