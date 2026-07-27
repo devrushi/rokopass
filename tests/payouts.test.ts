@@ -91,7 +91,7 @@ async function makeActivity(providerToken: string) {
 async function makeEarnedBooking(params: {
   activityId: string;
   parentId: string;
-  status?: "ATTENDED" | "NO_SHOW";
+  status?: "ATTENDED" | "NO_SHOW" | "CANCELLED";
   startsAt: Date;
   creditsSpent?: number;
 }) {
@@ -147,6 +147,7 @@ afterAll(async () => {
 
   await prisma.payoutStatementLine.deleteMany({ where: { bookingId: { in: bookingIds } } });
   await prisma.payoutStatement.deleteMany({ where: { providerId: { in: userIds } } });
+  await prisma.creditTransaction.deleteMany({ where: { userId: { in: userIds } } });
   await prisma.booking.deleteMany({ where: { id: { in: bookingIds } } });
   await prisma.classSession.deleteMany({ where: { id: { in: sessionIds } } });
   await prisma.child.deleteMany({ where: { parentId: { in: userIds } } });
@@ -258,6 +259,45 @@ describe("POST /admin/payouts/generate", () => {
     expect(statement.commissionAmountGbp).toBe(expectedCommission);
     expect(statement.commissionVatGbp).toBe(expectedVat);
     expect(statement.netAmountGbp).toBe(expectedGross - expectedCommission - expectedVat);
+  });
+
+  it("pays out a late-cancelled booking whose credits were forfeited, but not a refunded one", async () => {
+    const provider = await registerProvider();
+    const parent = await registerParent();
+    await setBusinessProfile(provider.token);
+    const activityId = await makeActivity(provider.token);
+
+    // Forfeited on cancellation (no BOOKING_REFUND transaction) — the provider still held the
+    // capacity and the credit was never returned, so this should be paid out just like a NO_SHOW.
+    await makeEarnedBooking({
+      activityId,
+      parentId: parent.id,
+      status: "CANCELLED",
+      startsAt: new Date("2024-06-10T10:00:00Z"),
+      creditsSpent: 3,
+    });
+
+    // Cancelled well within the free-cancellation window — refunded, so must NOT be paid out.
+    const refunded = await makeEarnedBooking({
+      activityId,
+      parentId: parent.id,
+      status: "CANCELLED",
+      startsAt: new Date("2024-06-15T10:00:00Z"),
+      creditsSpent: 5,
+    });
+    await prisma.creditTransaction.create({
+      data: { userId: parent.id, bookingId: refunded.id, amount: 5, reason: "BOOKING_REFUND" },
+    });
+
+    const res = await request(app)
+      .post("/admin/payouts/generate")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ providerId: provider.id, periodStart: "2024-06-01", periodEnd: "2024-07-01" });
+
+    expect(res.status).toBe(201);
+    expect(res.body.statement.creditsRedeemed).toBe(3);
+    expect(res.body.statement.lines).toHaveLength(1);
+    expect(res.body.statement.lines[0].creditsSpent).toBe(3);
   });
 
   it("never pays out the same booking twice across two generation runs", async () => {

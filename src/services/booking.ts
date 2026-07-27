@@ -6,6 +6,14 @@ import { AppError } from "../middleware/errorHandler";
 const MAX_SERIALIZATION_RETRIES = 3;
 const HOLDING_STATUSES = ["PENDING_APPROVAL", "CONFIRMED"] as const;
 
+// Free-cancellation window for a CONFIRMED booking — a core product differentiator ("cancel
+// without losing your credits") stays meaningfully flexible for parents while still giving a
+// provider some notice before a class instead of an unlimited zero-notice cancellation window.
+// Only applies once a provider has actually confirmed the spot: a still-PENDING_APPROVAL request
+// is always fully refundable on cancellation, since the provider never committed to it in the
+// first place (see cancelBooking below).
+const FREE_CANCELLATION_CUTOFF_HOURS = 4;
+
 function isSerializationError(err: unknown): boolean {
   // P2034: "Transaction failed due to a write conflict or a deadlock" — Postgres SERIALIZABLE
   // rolling back one side of a genuine race (e.g. two parents booking the last spot at once).
@@ -137,21 +145,26 @@ export async function cancelBooking({ bookingId, parentId }: CancelBookingParams
       throw new AppError("This class has already started", 400);
     }
 
+    const cutoff = new Date(booking.session.startsAt.getTime() - FREE_CANCELLATION_CUTOFF_HOURS * 60 * 60 * 1000);
+    const isRefundable = booking.status === "PENDING_APPROVAL" || new Date() < cutoff;
+
     const updated = await tx.booking.update({
       where: { id: booking.id },
       data: { status: "CANCELLED" },
     });
 
-    await tx.creditTransaction.create({
-      data: {
-        userId: parentId,
-        bookingId: booking.id,
-        amount: booking.creditsSpent,
-        reason: "BOOKING_REFUND",
-      },
-    });
+    if (isRefundable) {
+      await tx.creditTransaction.create({
+        data: {
+          userId: parentId,
+          bookingId: booking.id,
+          amount: booking.creditsSpent,
+          reason: "BOOKING_REFUND",
+        },
+      });
+    }
 
-    return updated;
+    return { ...updated, refunded: isRefundable, creditsForfeited: isRefundable ? 0 : booking.creditsSpent };
   });
 }
 

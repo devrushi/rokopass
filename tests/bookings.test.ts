@@ -243,7 +243,7 @@ describe("POST /bookings", () => {
 });
 
 describe("DELETE /bookings/:id (cancel)", () => {
-  it("refunds credits on cancellation", async () => {
+  it("refunds credits on cancellation of a still-pending request", async () => {
     const { token, childId } = await makeParentWithCredits(5);
     const { sessionId } = await makeActivityWithSession({ capacity: 5, creditCost: 3 });
 
@@ -259,7 +259,60 @@ describe("DELETE /bookings/:id (cancel)", () => {
 
     expect(cancelRes.status).toBe(200);
     expect(cancelRes.body.booking.status).toBe("CANCELLED");
+    expect(cancelRes.body.booking.refunded).toBe(true);
     expect(cancelRes.body.balance).toBe(5);
+  });
+
+  it("refunds a confirmed booking cancelled well outside the free-cancellation window", async () => {
+    const { token, childId } = await makeParentWithCredits(5);
+    // dayOffset defaults to 1 (~24h out) — comfortably outside the 4-hour cutoff.
+    const { sessionId } = await makeActivityWithSession({ capacity: 5, creditCost: 3 });
+
+    const bookRes = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ childId, sessionId });
+    await request(app)
+      .post(`/bookings/${bookRes.body.booking.id}/approve`)
+      .set("Authorization", `Bearer ${providerToken}`);
+
+    const cancelRes = await request(app)
+      .delete(`/bookings/${bookRes.body.booking.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(cancelRes.status).toBe(200);
+    expect(cancelRes.body.booking.refunded).toBe(true);
+    expect(cancelRes.body.balance).toBe(5);
+  });
+
+  it("forfeits credits when a confirmed booking is cancelled inside the free-cancellation window", async () => {
+    const { token, childId } = await makeParentWithCredits(5);
+    const { sessionId } = await makeActivityWithSession({ capacity: 5, creditCost: 3 });
+
+    const bookRes = await request(app)
+      .post("/bookings")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ childId, sessionId });
+    await request(app)
+      .post(`/bookings/${bookRes.body.booking.id}/approve`)
+      .set("Authorization", `Bearer ${providerToken}`);
+
+    // Pull the session in to 2 hours from now — inside the 4-hour cutoff — without needing to
+    // fight the recurring-schedule generator for a precisely-timed session.
+    await prisma.classSession.update({
+      where: { id: sessionId },
+      data: { startsAt: new Date(Date.now() + 2 * 60 * 60 * 1000) },
+    });
+
+    const cancelRes = await request(app)
+      .delete(`/bookings/${bookRes.body.booking.id}`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(cancelRes.status).toBe(200);
+    expect(cancelRes.body.booking.status).toBe("CANCELLED");
+    expect(cancelRes.body.booking.refunded).toBe(false);
+    expect(cancelRes.body.booking.creditsForfeited).toBe(3);
+    expect(cancelRes.body.balance).toBe(2); // unchanged — no refund credited
   });
 
   it("allows re-booking the same child into the same session after cancelling", async () => {

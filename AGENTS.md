@@ -2125,3 +2125,55 @@ the reply linked to `/browse/<real-activity-id>` — then confirmed in a
 live browser that clicking it lands directly on that activity's own
 detail page (title, description, "Meet the team", and the booking
 form pre-populated with Ruby already selected), not the Browse list.
+
+### 2026-07-27 — Free-Cancellation Cutoff
+
+The client named "cancel without losing money" as the platform's main
+selling point, then agreed it needed a limit — as built, a parent
+could cancel one second before a class started and still get a full
+refund, leaving the provider with an empty seat and zero notice.
+Added a 4-hour free-cancellation window (`FREE_CANCELLATION_CUTOFF_HOURS`
+in `src/services/booking.ts`): still generous compared to the typical
+"pay for a term, lose it if you can't make one" model, but gives
+providers real notice instead of none.
+
+**Design:**
+- Only applies to `CONFIRMED` bookings. A still-`PENDING_APPROVAL`
+  request is always fully refundable on cancellation regardless of
+  timing — the provider never committed to it, so there's nothing to
+  protect.
+- Cancelling a `CONFIRMED` booking inside the window forfeits the
+  credits (no `BOOKING_REFUND` transaction) rather than blocking the
+  cancellation outright — the parent can still free up the slot for
+  someone else, they just don't get the credit back.
+- `cancelBooking()` now returns `refunded`/`creditsForfeited` on the
+  booking so the frontend can say exactly what happened, not just
+  "cancelled."
+
+**Found and fixed a real accounting gap while implementing this:**
+forfeited credits would otherwise vanish into nowhere — the parent
+doesn't get them back, but the provider wasn't getting paid for them
+either, since `src/services/payouts.ts`'s eligibility query only
+looked at `ATTENDED`/`NO_SHOW` status. A late-forfeited cancellation
+is economically identical to a `NO_SHOW` (capacity held, credit spent,
+never refunded), so the payout query now also includes `CANCELLED`
+bookings that have no `BOOKING_REFUND` transaction — determined by
+checking the actual credit ledger rather than status alone, which is
+more robust than trying to encode "cancelled-but-not-refunded" as its
+own `BookingStatus` enum value (would have needed a migration and
+touched every place that already branches on booking status).
+
+**Frontend** (`client/src/pages/parent/MyBookings.tsx`) — the Cancel
+button now reads "Cancel (no refund)" and shows an inline warning
+*before* the parent commits, for any confirmed booking inside the
+window; the result message after cancelling states plainly whether
+credits were refunded or forfeited and how many.
+
+**Verified:** 176 backend tests green (4 new — pending-vs-confirmed
+refund behavior, forfeiture inside the window, and the payout
+eligibility gap fix, including a case proving a *refunded* cancellation
+correctly stays excluded from payout). Real browser pass: temporarily
+pulled a real seeded booking's session in to 2 hours from now,
+confirmed the UI correctly showed the no-refund warning and button
+label, cancelled it, saw the exact forfeiture message, then restored
+the demo data to its original state afterward.

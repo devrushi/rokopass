@@ -10,7 +10,12 @@ import { formatBusinessAddress } from "./providerBusiness";
 // and no refund follows it. ATTENDED is the obvious case; NO_SHOW is included too — the provider
 // held the capacity and the credit was not refunded to the parent, so the same revenue has been
 // realized on the provider's side either way. PENDING_APPROVAL/CONFIRMED haven't happened yet;
-// CANCELLED/REJECTED were refunded (see src/services/booking.ts) and never earn anything.
+// REJECTED is always refunded (see src/services/booking.ts) and never earns anything. CANCELLED
+// is the one status that can go either way: a parent cancelling inside the free-cancellation
+// window gets refunded (never earns), but a late cancellation past that window forfeits the
+// credit exactly like a NO_SHOW does — so it's included here too, determined by whether a
+// BOOKING_REFUND transaction actually exists for that booking (see the query below) rather than
+// by status alone.
 const EARNED_STATUSES = ["ATTENDED", "NO_SHOW"] as const;
 
 async function nextStatementNumber(tx: Prisma.TransactionClient): Promise<string> {
@@ -26,11 +31,11 @@ interface GeneratePayoutParams {
 }
 
 /**
- * Builds one payout statement for a provider covering every ATTENDED/NO_SHOW booking in the
- * period that hasn't already been included in an earlier statement (PayoutStatementLine.bookingId
- * is unique, so this is enforced at the DB level too, not just by this query). All money and
- * identity fields on the resulting statement are snapshotted now — see the schema comment on
- * PayoutStatement for why.
+ * Builds one payout statement for a provider covering every earned booking (ATTENDED, NO_SHOW,
+ * or a late/forfeited CANCELLED — see EARNED_STATUSES above) in the period that hasn't already
+ * been included in an earlier statement (PayoutStatementLine.bookingId is unique, so this is
+ * enforced at the DB level too, not just by this query). All money and identity fields on the
+ * resulting statement are snapshotted now — see the schema comment on PayoutStatement for why.
  */
 export async function generatePayoutStatement({ providerId, periodStart, periodEnd }: GeneratePayoutParams) {
   const provider = await prisma.user.findUnique({ where: { id: providerId } });
@@ -50,12 +55,15 @@ export async function generatePayoutStatement({ providerId, periodStart, periodE
 
   const eligibleBookings = await prisma.booking.findMany({
     where: {
-      status: { in: [...EARNED_STATUSES] },
       payoutStatementLine: null,
       session: {
         activity: { providerId },
         startsAt: { gte: periodStart, lt: periodEnd },
       },
+      OR: [
+        { status: { in: [...EARNED_STATUSES] } },
+        { status: "CANCELLED", creditTransactions: { none: { reason: "BOOKING_REFUND" } } },
+      ],
     },
     select: {
       id: true,
