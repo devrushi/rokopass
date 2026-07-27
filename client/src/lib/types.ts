@@ -45,10 +45,13 @@ export interface ActivityWithProviderContact extends Activity {
     id: string;
     firstName: string;
     lastName: string;
+    email: string;
     whatsappNumber: string | null;
+    phoneNumber: string | null;
     instagramUrl: string | null;
     facebookUrl: string | null;
     tiktokUrl: string | null;
+    websiteUrl: string | null;
   };
 }
 

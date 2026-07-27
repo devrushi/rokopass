@@ -216,6 +216,18 @@ adminRouter.patch("/activities/:id/moderation", async (req, res, next) => {
 
 // --- Plans (CRUD) ---
 
+// Plan has two unique columns (name, stripePriceId); a P2002 on either previously got
+// reported as "name already exists" regardless of which one actually conflicted, which
+// was misleading whenever a reused Stripe price ID was the real cause.
+function planUniqueConflictMessage(err: Prisma.PrismaClientKnownRequestError): string {
+  const target = err.meta?.target;
+  const fields = Array.isArray(target) ? target : typeof target === "string" ? [target] : [];
+  if (fields.includes("stripePriceId")) {
+    return "A plan with that Stripe price ID already exists";
+  }
+  return "A plan with that name already exists";
+}
+
 adminRouter.get("/plans", async (req, res, next) => {
   try {
     const audience = typeof req.query.audience === "string" ? req.query.audience : undefined;
@@ -245,7 +257,7 @@ adminRouter.post("/plans", async (req, res, next) => {
     res.status(201).json({ plan });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      next(new AppError("A plan with that name already exists", 409));
+      next(new AppError(planUniqueConflictMessage(err), 409));
       return;
     }
     next(err);
@@ -268,7 +280,7 @@ adminRouter.patch("/plans/:id", async (req, res, next) => {
     res.json({ plan: updated });
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      next(new AppError("A plan with that name already exists", 409));
+      next(new AppError(planUniqueConflictMessage(err), 409));
       return;
     }
     next(err);

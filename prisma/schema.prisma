@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
   // "native" covers local dev/tests; the rhel-openssl targets cover Netlify Functions' AWS
   // Lambda runtime (both OpenSSL versions included since the exact base image can change with
   // Netlify's own Node runtime updates) — see AGENTS.md.
@@ -39,12 +39,16 @@ model User {
   // E.164-ish (e.g. "+441234567890"), used to build a wa.me deep link for parents to message a
   // provider directly — not a real WhatsApp Business API integration, see AGENTS.md.
   whatsappNumber          String?
+  // Plain "call this number" contact, shown as a tel: link — distinct from whatsappNumber since
+  // not every provider phone (e.g. a landline) can take a WhatsApp deep link.
+  phoneNumber             String?
   // Provider marketing links, shown on their public activity pages. Plain URLs, not a real
   // social API integration (posting/reading requires per-platform developer credentials this
   // project doesn't have) — same class of seam as whatsappNumber above.
   instagramUrl            String?
   facebookUrl             String?
   tiktokUrl               String?
+  websiteUrl              String?
   // Provider safeguarding record — self-reported by the provider, reviewed by an admin before
   // approval. Not a live DBS registry check (that requires official umbrella-body registration,
   // not just an API key); see AGENTS.md for the MVP-vs-real-verification note.

@@ -221,8 +221,10 @@ describe("GET /activities/locations", () => {
     expect(res.body.locations).toContain(uniqueLocation);
     // No duplicates.
     expect(new Set(res.body.locations).size).toBe(res.body.locations.length);
-    // Alphabetically sorted.
-    expect(res.body.locations).toEqual([...res.body.locations].sort());
+    // Alphabetically sorted — Postgres's ORDER BY uses a locale-aware (case-insensitive)
+    // collation, which JS's default .sort() does not match (it's a byte/case-sensitive
+    // comparison), so localeCompare is needed to check against the same ordering semantics.
+    expect(res.body.locations).toEqual([...res.body.locations].sort((a: string, b: string) => a.localeCompare(b)));
   });
 });
 

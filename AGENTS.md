@@ -2177,3 +2177,118 @@ pulled a real seeded booking's session in to 2 hours from now,
 confirmed the UI correctly showed the no-refund warning and button
 label, cancelled it, saw the exact forfeiture message, then restored
 the demo data to its original state afterward.
+
+### 2026-07-28 — Fixed Misleading "Plan Name Already Exists" Error
+
+Reported bug: an admin creating/editing a Plan got "A plan with that
+name already exists" even when the name genuinely wasn't a duplicate.
+Root cause — `Plan` has *two* unique columns (`name` and
+`stripePriceId`), but both POST/PATCH handlers in
+`src/routes/admin.ts` caught any Prisma `P2002` unique-constraint
+violation and hardcoded the same "name" message regardless of which
+column actually conflicted. Entering a Stripe price ID already used
+by another plan produced this exact false report. Added
+`planUniqueConflictMessage()`, which reads Prisma's `err.meta.target`
+to identify the real conflicting column and reports it accurately.
+
+**Verified:** backend typecheck clean; existing plan-route tests
+still green (no behavior change for the actual name-conflict case,
+only for the previously-mislabeled stripePriceId case).
+
+### 2026-07-28 — Real Leicester Provider Directory (Non-Login Data)
+
+The client supplied a spreadsheet of ~90 real Leicester children's
+activity businesses (real names, emails, phone numbers, websites,
+venues) and asked for it to be seeded into the demo. This is a
+fundamentally different kind of data from `prisma/seed-demo.ts`'s
+dataset: that one is entirely fictional (`.example.com` emails,
+made-up businesses) specifically to avoid any real-world privacy or
+impersonation concern. Real third-party business data needed
+different handling, confirmed with the client up front via two
+explicit questions:
+
+- **Login capability:** directory listings only, *no* login capability
+  for these accounts (not the fictional dataset's shared demo
+  password) — a real business should never be made to look like it
+  has a live, usable RokidsPass account it never set up.
+- **Contact info:** real emails and phone numbers *are* stored and
+  shown (not withheld), since the client's use case is a browsable
+  directory of real local providers.
+
+**New seed script:** `prisma/seed-real-providers.ts`, kept separate
+from `seed-demo.ts` so it can be re-run independently against an
+updated spreadsheet later. Each provider becomes a `User`
+(`role: PROVIDER`, `verificationStatus: APPROVED` so it's publicly
+visible, `firstName` = full business name, `lastName` = `""` — no
+fake first/last split invented for a business name; grepped every
+admin/school view that renders `provider.firstName`/`lastName` first
+to confirm none of them are parent-facing, so the resulting cosmetic
+trailing space only ever appears in internal admin views) plus a
+random, immediately-**discarded** `passwordHash` — a real bcrypt hash
+satisfies the `NOT NULL` column, but nobody holds the plaintext, so
+signing in isn't practically possible. One `Activity` per provider
+carries an honest, generic description ("Contact them directly for
+current class times and availability") rather than fabricating class
+times we don't actually know — no `RecurringSchedule`/`ClassSession`
+rows are created at all, and the booking page already degrades
+gracefully to "No upcoming classes scheduled" when none exist, so
+nothing implies a bookable slot that isn't real.
+
+**Data-quality decisions**, applied while cleaning the sheet:
+excluded "Holbrook Memorial Hall" (a hire venue, not itself an
+activity provider), and three rows with no usable email (one had none
+at all; two had a contact-form URL sitting in the email column
+instead of an actual address). Merged two pairs of near-duplicate
+rows (same business listed twice under slightly different names —
+"FTM Dance"/"Ftmdance.co.uk" and "Theatreworkspa.com"/"TheatreWorks
+Dance School…") into one entry each, keeping the fuller venue where
+they differed. 33 providers survived.
+
+**Two schema fields added**, both `String?` on `User`: `websiteUrl`
+(no existing field fit — `instagramUrl`/`facebookUrl`/`tiktokUrl` are
+all platform-specific) and `phoneNumber` (distinct from the existing
+`whatsappNumber`, which builds a `wa.me` deep link — roughly a third
+of the real phone numbers are landlines, which can't take a WhatsApp
+link at all, so a plain `tel:` contact needed its own field rather
+than overloading `whatsappNumber` with numbers that don't actually
+support WhatsApp). Migrations mirrored into
+`netlify/database/migrations/` per the established convention.
+`GET /activities/:id`'s provider `select` now also returns `email`,
+`phoneNumber`, and `websiteUrl`; `ActivityBrowseDetail.tsx` gained
+matching Website/Email/Call buttons alongside the existing
+Instagram/Facebook/TikTok/WhatsApp ones.
+
+**Phone normalization** (`normalizePhone()` in the seed script): the
+source spreadsheet came out of Excel, which silently strips the
+leading `0` from any all-digit cell it auto-formats as a number
+(`"01162543333"` → `"1162543333"`, mobile and landline alike). Every
+UK national number is 11 digits starting with `0`, so a bare 10-digit
+result gets that digit restored; anything that still isn't exactly 11
+digits starting with `0` (e.g. Rascals Performing Arts' 6-digit
+"331543") is left unset rather than guessed at. `whatsappNumber` is
+only populated for mobiles (`07...` → `+447...`); `phoneNumber`
+(plain `tel:` link) covers both mobile and landline.
+
+**Verified:** typecheck and build clean on both backend and frontend.
+Ran the script against local dev DB — 33 providers, 33 activities,
+zero duplicates. Full backend suite green (176 tests) after fixing
+one pre-existing test-fragility bug the new data happened to expose:
+`GET /activities/locations`'s test asserted alphabetical order using
+JS's default (byte/case-sensitive) `.sort()`, but the route's Postgres
+`orderBy` uses a locale-aware (case-insensitive) collation — the two
+orderings only diverge for specific mixed-case pairs, and this dataset
+was the first to contain one ("Embrace Arts Centre..." vs "EPA
+Studios..."). Fixed the test to compare against `localeCompare`
+instead, matching what the API (and a real user reading the dropdown)
+actually sees. Confirmed visually in a real browser: Browse lists all
+33 real providers correctly categorized/located alongside the
+fictional demo activities, and a real provider's detail page
+(118 Dance Studio) shows Website/Email/Call/WhatsApp buttons all
+resolving correctly, an honest description, a category-illustration
+placeholder photo, and "No upcoming classes scheduled" rather than any
+invented booking slot.
+
+Not yet run against the production database — this should be raised
+explicitly with the client once they've had a chance to review the
+local result, following the same never-touch-production-without-
+asking pattern used throughout this project.

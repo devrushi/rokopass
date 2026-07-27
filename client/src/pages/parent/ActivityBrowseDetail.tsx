@@ -78,6 +78,24 @@ export function ActivityBrowseDetail() {
           </p>
         </div>
         <div className="session-row__actions">
+          {activity.provider.websiteUrl && (
+            <a
+              href={activity.provider.websiteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="button button--secondary"
+            >
+              Website
+            </a>
+          )}
+          <a href={`mailto:${activity.provider.email}`} className="button button--secondary">
+            Email
+          </a>
+          {activity.provider.phoneNumber && (
+            <a href={`tel:${activity.provider.phoneNumber.replace(/[^\d+]/g, "")}`} className="button button--secondary">
+              Call {activity.provider.phoneNumber}
+            </a>
+          )}
           {activity.provider.instagramUrl && (
             <a
               href={activity.provider.instagramUrl}
