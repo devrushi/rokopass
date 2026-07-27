@@ -153,7 +153,22 @@ describe("POST /ai/chat", () => {
     expect(res.body.reply).toContain("New activity");
 
     const call = messagesCreateMock.mock.calls[0][0];
-    expect(call.system).toContain("platform-help assistant");
+    expect(call.system).toContain("talking to an activity provider");
+    expect(call.system).toContain("[Provider Dashboard](/provider)");
+  });
+
+  it("gives the parent assistant navigation links to real pages", async () => {
+    const { token } = await makeUser("parent-nav", "PARENT");
+    mockTextResponse("Head to Browse Activities to book!");
+
+    await request(app)
+      .post("/ai/chat")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ messages: [{ role: "user", content: "How do I book something?" }] });
+
+    const call = messagesCreateMock.mock.calls[0][0];
+    expect(call.system).toContain("[Browse Activities](/browse)");
+    expect(call.system).toContain("[My Children](/children)");
   });
 
   it("rejects admin (not in scope for this feature)", async () => {

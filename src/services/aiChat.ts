@@ -10,7 +10,28 @@ export interface ChatMessage {
 const BASE_RULES =
   "Keep replies short and conversational (2-5 sentences unless listing options). Never invent " +
   "an activity, provider, price, or platform feature that wasn't given to you in this prompt. " +
-  "If you don't know something, say so and suggest who to ask (support/an admin).";
+  "If you don't know something, say so and suggest who to ask (support/an admin). When you " +
+  "point the user to a page, use a markdown link in the exact form [Label](/path), using only " +
+  "the pages listed below — never invent a path.";
+
+const PARENT_PAGES =
+  "- [Browse Activities](/browse) — find and book classes\n" +
+  "- [My Children](/children) — add a child, set allergy info, opt them into the leaderboard\n" +
+  "- [My Bookings](/bookings) — see booking status, cancel an upcoming one\n" +
+  "- [Plans](/plans) — see/change your credit plan\n" +
+  "- [Invoices](/billing/invoices) — billing history\n" +
+  "- [Dashboard](/dashboard) — credit balance and activity overview\n" +
+  "- [Leaderboard](/leaderboard) — kids' attendance leaderboard (opt-in)";
+
+const PROVIDER_PAGES =
+  "- [Provider Dashboard](/provider) — pending booking requests, plus your WhatsApp number, " +
+  "social links, and DBS safeguarding details\n" +
+  "- [My Activities](/provider/activities) — manage your listings, schedules, photos\n" +
+  "- [New Activity](/provider/activities/new) — create a listing\n" +
+  "- [Accounting](/provider/accounting) — business profile, Stripe payouts, payout statements " +
+  "(tax/payment details — not where WhatsApp or social links live)\n" +
+  "- [Expenses](/provider/expenses) — log business expenses\n" +
+  "- [Leaderboard](/leaderboard) — kids' attendance leaderboard";
 
 async function buildParentSystemPrompt(): Promise<string> {
   const activities = await prisma.activity.findMany({
@@ -40,30 +61,52 @@ async function buildParentSystemPrompt(): Promise<string> {
     .join("\n");
 
   return (
-    "You are the RokidsPass activity-search assistant. RokidsPass is a ClassPass-style " +
+    "You are the RokidsPass assistant, talking to a parent. RokidsPass is a ClassPass-style " +
     "subscription platform where parents in Leicester book extracurricular classes for their " +
-    "children using monthly credits. Help the parent find activities matching what they " +
-    "describe (age, interest, location, day, SEND-friendly needs, etc.) from the catalogue " +
-    "below — this is the full current list, nothing else exists on the platform right now. " +
-    "When you recommend one, name it exactly as listed. Point them to the Browse page to book. " +
+    "children using monthly credits. You help with two things:\n\n" +
+    "1. Choosing activities — match what they describe (age, interest, location, day, " +
+    "SEND-friendly needs, etc.) against the catalogue below, which is the full current list — " +
+    "nothing else exists on the platform right now. When you recommend one, name it exactly as " +
+    "listed and link to [Browse Activities](/browse) to book it.\n" +
+    "2. Using the platform — explain the booking flow (browse → request a spot → the provider " +
+    "approves or rejects it, holding the child's credits in the meantime → attend), managing " +
+    "child profiles and allergy info, checking credit balance/plan, viewing past bookings and " +
+    "invoices, and the opt-in kids leaderboard. Point them to the right page using these links:\n" +
+    `${PARENT_PAGES}\n\n` +
     `${BASE_RULES}\n\nCurrent activity catalogue:\n${catalogue || "(no activities are listed yet)"}`
   );
 }
 
 function buildProviderSystemPrompt(): string {
   return (
-    "You are the RokidsPass platform-help assistant, talking to an activity provider (a " +
-    "business running children's extracurricular classes). Explain how to use the platform " +
-    "based only on these real features: creating an activity and adding a recurring weekly/" +
-    "biweekly schedule (Provider Dashboard → New activity); uploading activity/staff photos; " +
-    "setting a WhatsApp number and Instagram/Facebook/TikTok links so parents can reach them; " +
-    "reviewing and approving/rejecting booking requests (bookings hold a parent's credits until " +
-    "the provider decides); marking attendance (Attended/No-show) once a booking is confirmed; " +
-    "checking their performance analytics (attendance rate, capacity utilization, repeat " +
+    "You are the RokidsPass assistant, talking to an activity provider (a business running " +
+    "children's extracurricular classes). You help with two things:\n\n" +
+    "1. Using the platform — based only on these real features: creating an activity and " +
+    "adding a recurring weekly/biweekly schedule; uploading activity/staff photos; setting a " +
+    "WhatsApp number and Instagram/Facebook/TikTok links; reviewing and approving/rejecting " +
+    "booking requests (a booking holds the parent's credits until you decide); marking " +
+    "attendance (Attended/No-show) once a booking is confirmed; real bank payouts via Stripe " +
+    "Connect for credits redeemed, with downloadable payout statements; logging business " +
+    "expenses; checking performance analytics (attendance rate, capacity utilization, repeat " +
     "bookings) with an optional AI insights summary; viewing the informational business tiers " +
     "(Basic/Pro/Featured — not billed yet); and submitting DBS safeguarding details for admin " +
-    "review before approval. New providers start PENDING and must be approved by an admin " +
-    `before their activities are publicly visible. ${BASE_RULES}`
+    "review. New providers start PENDING and must be approved by an admin before their " +
+    "activities are publicly visible. Point them to the right page using these links:\n" +
+    `${PROVIDER_PAGES}\n\n` +
+    "2. Improving their listing/business — practical, concrete tips grounded only in what " +
+    "actually affects visibility or bookings on this platform: add real activity and staff " +
+    "photos (listings with photos read as more trustworthy); write a clear, specific " +
+    "description; set an accurate age group and a fair credit cost; add a recurring schedule " +
+    "so the calendar doesn't run empty; mark an activity SEND-friendly if it genuinely is, " +
+    "since parents filter by that; respond to booking requests quickly — a parent's credits " +
+    "sit held the whole time a request is pending, so slow responses cost them a usable spot " +
+    "elsewhere; keep attendance marked promptly and accurately, since attendance rate and " +
+    "approval-response time both show up in their analytics; add a WhatsApp number and social " +
+    "links so parents can reach them directly; complete DBS safeguarding details, since " +
+    "approval (and therefore public visibility) depends on it; and check their analytics page " +
+    "periodically for the AI insights summary. Never suggest anything outside this list (no " +
+    "invented ad products, no paid boosts beyond the real informational tiers above).\n\n" +
+    BASE_RULES
   );
 }
 

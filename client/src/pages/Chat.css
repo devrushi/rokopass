@@ -37,6 +37,17 @@
   opacity: 0.6;
 }
 
+.chat-message__link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.chat-message__link:hover {
+  opacity: 0.85;
+}
+
 .chat-form {
   display: flex;
   gap: 0.5rem;

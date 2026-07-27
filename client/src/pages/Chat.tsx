@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { Fragment, useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { apiRequest, ApiError } from "../lib/apiClient";
 import "./Chat.css";
 import "./provider/provider.css";
@@ -6,6 +7,34 @@ import "./provider/provider.css";
 interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+}
+
+// Matches the assistant's own [Label](/path) link convention (see src/services/aiChat.ts) —
+// rendered as real in-app navigation instead of dead text, without pulling in a full markdown
+// renderer for what's otherwise plain conversational text.
+const MARKDOWN_LINK = /\[([^\]]+)\]\((\/[^)\s]+)\)/g;
+
+function renderMessageContent(content: string) {
+  const parts: (string | { label: string; path: string })[] = [];
+  let lastIndex = 0;
+  for (const match of content.matchAll(MARKDOWN_LINK)) {
+    const [full, label, path] = match;
+    const index = match.index ?? 0;
+    if (index > lastIndex) parts.push(content.slice(lastIndex, index));
+    parts.push({ label, path });
+    lastIndex = index + full.length;
+  }
+  if (lastIndex < content.length) parts.push(content.slice(lastIndex));
+
+  return parts.map((part, i) =>
+    typeof part === "string" ? (
+      <Fragment key={i}>{part}</Fragment>
+    ) : (
+      <Link key={i} to={part.path} className="chat-message__link">
+        {part.label}
+      </Link>
+    ),
+  );
 }
 
 export function Chat() {
@@ -48,7 +77,7 @@ export function Chat() {
         {messages.length === 0 && <p className="page-status">Say hello to get started.</p>}
         {messages.map((message, index) => (
           <div key={index} className={`chat-message chat-message--${message.role}`}>
-            {message.content}
+            {message.role === "assistant" ? renderMessageContent(message.content) : message.content}
           </div>
         ))}
         {isSending && <div className="chat-message chat-message--assistant chat-message--pending">Thinking…</div>}

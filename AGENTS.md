@@ -1733,3 +1733,87 @@ code; doesn't block the real deploy path (`netlify build`/`deploy` run
 on Netlify's own Node-20-pinned build servers), but local `netlify
 dev` iteration isn't currently usable on this machine without an older
 Node version.
+
+### 2026-07-27 — Netlify DB Provisioning + Ask AI: Navigation Links and Provider Growth Tips
+
+Two pieces of follow-up work in one session: unblocking the Netlify
+deployment's database step, and a client-requested upgrade to the Ask
+AI feature.
+
+**Netlify DB provisioning:** the old Neon extension marketplace flow
+referenced in the previous entry has been replaced by Netlify with a
+built-in "Netlify Database" feature — you don't provision it via a
+separate dashboard/CLI step at all; installing the `@netlify/database`
+npm package is the signal Netlify's own build pipeline uses to
+auto-provision a Postgres database (still Neon underneath) on deploy.
+Confirmed via `netlify database status` after installing it ("🟢
+Netlify Database is enabled for this project"). Still plain Postgres
+under the hood, so Prisma needs no changes — this doesn't replace the
+existing schema/migrations/seed setup, just supplies the connection
+string. The exact env var name the connection string lands under at
+Function runtime (not a plain `DATABASE_URL` visible via
+`netlify env:list` — Netlify DB appears to inject it dynamically into
+the function execution context rather than as a static site env var)
+is still unconfirmed — next session should check by actually running
+`netlify dev` or inspecting a live function's `process.env`.
+
+**Local tooling fix, found along the way:** `netlify build`/
+`netlify database status` crashed unconditionally on this machine
+(`TypeError: Cannot read properties of undefined (reading
+'Intrinsic')`) — root-caused via stack trace to netlify-cli's bundled
+dependency scanner (`precinct` → `detective-typescript` →
+`@typescript-eslint/typescript-estree` → `ts-api-utils`) failing to
+parse this project's TypeScript 7 (very new; that toolchain doesn't
+support it yet). Fixed with a scoped `npm overrides` entry pinning
+`typescript` to 5.7.3 *only* within netlify-cli's own dependency tree
+(a fully-qualified nested path was needed — a bare top-level override
+key didn't reach the hoisted `ts-api-utils` instance) — the project's
+own `tsc`/`typescript@7.0.2` used for actual compilation is untouched.
+Confirmed via `npm ls typescript` showing the split resolution, then
+`netlify build --dry` succeeding.
+
+**Ask AI — navigation links + provider growth tips**
+(`src/services/aiChat.ts`, `client/src/pages/Chat.tsx`): client asked
+for two things — help parents pick activities *and* navigate the
+platform, help providers use the platform *and* improve their
+listings — both with clickable links, not just prose.
+- Both system prompts now include an explicit whitelist of real pages
+  as `[Label](/path)` markdown links (`PARENT_PAGES`/`PROVIDER_PAGES`
+  constants) — the model is instructed to link only from this list,
+  never invent a path. Caught and fixed one real hallucination during
+  manual testing: the provider prompt initially let the model guess
+  WhatsApp/social links were set on the Accounting page (a real page,
+  wrong purpose) since that mapping wasn't spelled out — fixed by
+  stating explicitly in `PROVIDER_PAGES` that those fields live on the
+  Provider Dashboard, and that Accounting is tax/payment details only.
+- Provider prompt gained a second half: concrete, platform-grounded
+  listing-improvement tips (photos, clear descriptions, recurring
+  schedules so the calendar isn't empty, fast approval turnaround
+  since a pending request holds the parent's credits, prompt attendance
+  marking since it feeds analytics, DBS completion since it gates
+  public visibility) — explicitly told never to invent tactics outside
+  this list (no fictional "boosts" beyond the real informational
+  tiers).
+- `Chat.tsx` renders assistant messages through a small regex-based
+  parser (`MARKDOWN_LINK`) turning `[Label](/path)` into a real
+  `react-router-dom` `Link` — chosen over pulling in a markdown library
+  for what's otherwise plain conversational text.
+
+**Verified:** 170 backend tests green (2 new — provider prompt now
+checked for the corrected `[Provider Dashboard](/provider)` link
+instead of the old "platform-help assistant" phrase, plus a new test
+asserting the parent prompt's page links are present), both builds
+clean. Manually tested both roles against the real Anthropic API (not
+mocked) — parent asking "how do I book a class and add my child"
+correctly returned `[My Children](/children)` and
+`[Browse Activities](/browse)`; provider asking "how can I get more
+bookings" returned the full grounded tips list plus correct links;
+provider asking specifically where WhatsApp/Instagram fields live
+returned the corrected `[Provider Dashboard](/provider)` answer after
+the fix above. Confirmed the frontend's link-extraction regex against
+real (not fabricated) API response text. Browser-level visual
+confirmation of the rendered clickable links was not completed this
+session — the local Playwright browser binary wasn't available in this
+environment's cache; the underlying logic (regex parsing, `Link`
+rendering) was verified directly instead, and both `tsc --noEmit` and
+`vite build` passed clean for the changed component.
