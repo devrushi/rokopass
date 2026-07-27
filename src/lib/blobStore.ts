@@ -1,16 +1,18 @@
 import { getStore } from "@netlify/blobs";
 
-// Normally called only inside a deployed Netlify Function or under `netlify dev` — both
-// automatically inject the context getStore() needs (site ID + a scoped token), no manual
-// configuration required. The explicit-credential fallback below exists for one specific extra
-// case: running a one-off script (e.g. demo-data seeding) from a plain local process against the
-// real production Blobs store, outside any Netlify-managed runtime — see prisma/seed-demo.ts.
+// Netlify's dynamic Blobs binding (site ID + a scoped token, normally auto-injected) does not
+// reach this function's runtime — confirmed the same way as the NETLIFY_DB_URL binding gap (see
+// AGENTS.md): both appear to only reach Netlify's newer v2/edge function runtimes, not this
+// classic Lambda-handler-style one. BLOBS_AUTH_TOKEN (deliberately not NETLIFY_AUTH_TOKEN, a name
+// netlify-cli itself treats specially) is a full personal access token set as a site env var —
+// broader access than this narrow use needs, a deliberate short-term tradeoff; see AGENTS.md for
+// the real fix (migrating to a function shape that gets these bindings natively).
 export function getUploadsStore() {
-  if (process.env.NETLIFY_SITE_ID && process.env.NETLIFY_AUTH_TOKEN) {
+  if (process.env.NETLIFY_SITE_ID && process.env.BLOBS_AUTH_TOKEN) {
     return getStore({
       name: "uploads",
       siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_AUTH_TOKEN,
+      token: process.env.BLOBS_AUTH_TOKEN,
     });
   }
   return getStore("uploads");
