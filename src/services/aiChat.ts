@@ -11,8 +11,8 @@ const BASE_RULES =
   "Keep replies short and conversational (2-5 sentences unless listing options). Never invent " +
   "an activity, provider, price, or platform feature that wasn't given to you in this prompt. " +
   "If you don't know something, say so and suggest who to ask (support/an admin). When you " +
-  "point the user to a page, use a markdown link in the exact form [Label](/path), using only " +
-  "the pages listed below — never invent a path.";
+  "point the user to a static page, use a markdown link in the exact form [Label](/path), using " +
+  "only the pages listed below — never invent a path or a page ID.";
 
 const PARENT_PAGES =
   "- [Browse Activities](/browse) — find and book classes\n" +
@@ -54,6 +54,7 @@ async function buildParentSystemPrompt(userId: string): Promise<string> {
         provider: { OR: [{ role: "ADMIN" }, { verificationStatus: "APPROVED" }] },
       },
       select: {
+        id: true,
         title: true,
         category: true,
         location: true,
@@ -74,7 +75,7 @@ async function buildParentSystemPrompt(userId: string): Promise<string> {
   const catalogue = activities
     .map(
       (a) =>
-        `- "${a.title}" (${a.category}, ${a.ageGroup.label} [${a.ageGroup.minAge}-${a.ageGroup.maxAge}yo], ` +
+        `- [${a.title}](/browse/${a.id}) (${a.category}, ${a.ageGroup.label} [${a.ageGroup.minAge}-${a.ageGroup.maxAge}yo], ` +
         `${a.location}, ${a.creditCost} credits/class${a.isSendFriendly ? ", SEND-friendly" : ""})`,
     )
     .join("\n");
@@ -93,8 +94,11 @@ async function buildParentSystemPrompt(userId: string): Promise<string> {
     "their current age — if they ask about a child by name (e.g. \"suggest something for " +
     "Ruby\"), use that child's age directly from the list rather than asking for it; only ask if " +
     "the name they used doesn't match anyone on the list, or they haven't named a child at all. " +
-    "When you recommend an activity, name it exactly as listed and link to " +
-    "[Browse Activities](/browse) to book it.\n" +
+    "Each catalogue entry already starts with its own [Activity Name](/browse/<id>) link — when " +
+    "you recommend a specific activity, reuse that exact link verbatim so the parent goes " +
+    "straight to that activity's own page to book it, never a generic link. Only link to " +
+    "[Browse Activities](/browse) itself when they want to browse everything, not when " +
+    "recommending one specific activity.\n" +
     "2. Using the platform — explain the booking flow (browse → request a spot → the provider " +
     "approves or rejects it, holding the child's credits in the meantime → attend), managing " +
     "child profiles and allergy info, checking credit balance/plan, viewing past bookings and " +

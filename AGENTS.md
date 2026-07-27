@@ -2101,3 +2101,27 @@ navigation instead of failing silently.
 the demo" from a logged-out `/login` page correctly logged in and
 landed on `/dashboard`, zero console errors. 172 backend tests
 unaffected (frontend-only change).
+
+### 2026-07-27 — Ask AI: Recommendations Link Straight to the Activity
+
+Clicking an AI-recommended activity landed on the generic Browse page
+rather than that activity itself, making the parent search again for
+something the assistant had already found. `buildParentSystemPrompt`
+(`src/services/aiChat.ts`) now selects each activity's `id` and
+embeds a real `[Activity Name](/browse/<id>)` link directly into its
+own catalogue line, with an explicit instruction to reuse that exact
+link verbatim when recommending it — the model never constructs the
+path itself, only copies a link it was already given, so there's no
+risk of a hallucinated ID. `[Browse Activities](/browse)` (the
+generic page) is now reserved for when the parent wants to browse
+everything themselves, not for a specific recommendation. No frontend
+change needed — `Chat.tsx`'s link-rendering regex already matched any
+`/path`, not just the static nav pages.
+
+**Verified:** 173 backend tests green (1 new, asserting a real
+activity's UUID appears in its own catalogue link). Confirmed against
+the real Anthropic API with the client's exact "Ruby Brown" scenario —
+the reply linked to `/browse/<real-activity-id>` — then confirmed in a
+live browser that clicking it lands directly on that activity's own
+detail page (title, description, "Meet the team", and the booking
+form pre-populated with Ruby already selected), not the Browse list.

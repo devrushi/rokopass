@@ -141,6 +141,34 @@ describe("POST /ai/chat", () => {
     expect(call.system).toContain("Unique Chat Test Swimming");
   });
 
+  it("gives each catalogue activity its own direct /browse/:id link", async () => {
+    const provider = await makeUser("chat-provider-link", "PROVIDER");
+    const activity = await prisma.activity.create({
+      data: {
+        providerId: provider.user.id,
+        ageGroupId,
+        title: "Deep Link Test Karate",
+        description: "test",
+        category: "Martial Arts",
+        location: "Test Dojo",
+        capacity: 10,
+        creditCost: 3,
+      },
+    });
+
+    const { token } = await makeUser("parent-link", "PARENT");
+    mockTextResponse("Deep Link Test Karate looks perfect!");
+
+    await request(app)
+      .post("/ai/chat")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ messages: [{ role: "user", content: "Anything for martial arts?" }] });
+
+    const call = messagesCreateMock.mock.calls[0][0];
+    expect(call.system).toContain(`[Deep Link Test Karate](/browse/${activity.id})`);
+    expect(call.system).toContain("reuse that exact link verbatim");
+  });
+
   it("lets a provider chat and gets platform-help context, not activity data", async () => {
     const { token } = await makeUser("provider", "PROVIDER");
     mockTextResponse("Go to Provider Dashboard > New activity.");
