@@ -1,3 +1,8 @@
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+}
+
 .chat-window {
   display: flex;
   flex-direction: column;
@@ -67,4 +72,11 @@
 .chat-form input:focus {
   outline: 2px solid var(--accent-soft);
   border-color: var(--accent);
+}
+
+/* Used inside the floating widget (see ChatWidget.tsx) — a shorter window fits a fixed-size
+   popup better than the full page's 50vh. */
+.chat-panel--compact .chat-window {
+  min-height: 260px;
+  max-height: 340px;
 }

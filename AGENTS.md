@@ -2010,3 +2010,68 @@ failures. 170/170 backend tests still green after all of the above.
 - Real Stripe keys, admin password storage/handoff process, and
   demo-data-on-production-forever-or-not are all still open questions
   from the previous entry, unchanged by this one.
+
+### 2026-07-27 — Ask AI: Child-Aware Suggestions, Floating Widget, Session Persistence
+
+Three client-requested improvements to Ask AI: use a parent's own
+children when they ask about one by name, add a floating chat button
+available on every page (not just `/chat`), and keep the conversation
+alive across navigation for as long as the browser session lasts.
+
+**Child-aware suggestions**
+(`src/services/aiChat.ts`) — asking "for Ruby Brown can you suggest
+any activities" previously made the assistant ask for her age every
+time, even though it's already on file. `buildParentSystemPrompt` now
+also fetches that parent's children (name + age, computed from
+`dateOfBirth` — see the new `ageInYears` helper) and includes them in
+the prompt, with an instruction to use a named child's age directly
+rather than re-asking, falling back to asking only if the name doesn't
+match anyone on file. Verified against the real Anthropic API with the
+client's exact scenario — correctly identified Ruby as 10 and
+recommended the one matching activity without asking a single
+follow-up question.
+
+**Floating widget + session persistence** — these two were built
+together since the widget's whole point is not losing the
+conversation when you navigate away from it.
+- `client/src/hooks/useChatMessages.ts` — message state now lives in
+  `sessionStorage` (not `localStorage`, and not plain component
+  state), so it survives page navigation *and* full reloads within the
+  tab, but is gone once the browser session ends — matching "hold data
+  till session is active" literally. Cleared explicitly on logout
+  (`AuthContext.logout()`) so a second user signing in on the same tab
+  never inherits the previous one's conversation.
+- The actual chat UI (message list, link rendering, input form) was
+  extracted from `Chat.tsx` into a reusable `client/src/components/
+  ChatPanel.tsx`, parameterized with a `compact` variant for the
+  narrower floating popup vs. the full `/chat` page. Both now read/
+  write the same `useChatMessages` state, so switching between "the
+  floating button" and "the dedicated page" never shows two different
+  conversations.
+- `client/src/components/ChatWidget.tsx` — a fixed-position button
+  (bottom-right) rendered once in `Layout.tsx`, so it's present on
+  every route without needing to add it page-by-page. Gated to
+  `PARENT`/`PROVIDER` roles (matching the existing `/chat` route
+  gating) and hidden specifically on `/chat` itself, so the floating
+  popup and the full page are never both visible at once. Clicking a
+  navigation link inside a widget reply (the `[Label](/path)`
+  convention from the previous entry) now also closes the widget, so
+  the destination page isn't left covered by the popup.
+
+**Found and fixed along the way:** local browser verification
+initially showed the widget not rendering at all — traced to a stale
+`client/.env.local` left over from an earlier session's ngrok tunnel
+demo, still pointing `VITE_API_URL` at a long-dead tunnel URL, so
+every API call (including the one that loads the logged-in user)
+failed with a CORS error and the widget's own-role gate never got a
+user to check. Deleted the file; not a bug in this feature, but worth
+recording since it silently broke local dev entirely.
+
+**Verified:** 172 backend tests still green (2 new, covering the
+child-context prompt injection and the "no children yet" fallback
+message). Real browser pass: widget renders correctly on the
+Dashboard with zero console errors; sending a message and clicking a
+resulting link both closed the widget and navigated correctly;
+navigating away and back (Dashboard → Browse) with the widget reopened
+showed the same 2-message conversation still present, confirming the
+sessionStorage persistence actually works across route changes.

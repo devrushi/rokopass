@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, Outlet } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { ChatWidget } from "./ChatWidget";
 import "./Layout.css";
 
 export function Layout() {
@@ -151,6 +152,8 @@ export function Layout() {
         </span>
         <span className="layout__footer-tag">A credit-based subscription for children's activities in Leicester.</span>
       </footer>
+
+      <ChatWidget />
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { apiRequest } from "../lib/apiClient";
+import { clearStoredChatMessages } from "../hooks/useChatMessages";
 import { clearTokens, getAccessToken, setTokens } from "../lib/tokenStorage";
 
 export interface UserProfile {
@@ -85,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function logout() {
     clearTokens();
+    clearStoredChatMessages();
     setUser(null);
   }
 
