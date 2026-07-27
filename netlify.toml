@@ -4,8 +4,12 @@
 
 [build]
   # Root npm install triggers `postinstall: prisma generate`, needed before the function
-  # bundler picks up @prisma/client. Client build only needs its own install.
-  command = "npm install && cd client && npm install && npm run build"
+  # bundler picks up @prisma/client. `prisma migrate deploy` only applies pending schema
+  # migrations (additive, idempotent) — never seeds data, so it's safe to run on every build;
+  # see AGENTS.md for why seeding production is handled separately, not automatically here.
+  # Netlify's built-in database exposes its connection string as NETLIFY_DB_URL, not
+  # DATABASE_URL, hence the export bridge (same reasoning as netlify/functions/api.ts).
+  command = "npm install && export DATABASE_URL=\"${DATABASE_URL:-$NETLIFY_DB_URL}\" && npx prisma migrate deploy && cd client && npm install && npm run build"
   publish = "client/dist"
 
 [build.environment]

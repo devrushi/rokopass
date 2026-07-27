@@ -8,6 +8,15 @@ import serverless from "serverless-http";
 // the app is imported lazily inside getServerlessHandler() instead.
 process.env.RUNNING_IN_NETLIFY_FUNCTION = "true";
 
+// Netlify's built-in database (see AGENTS.md) injects its connection string as NETLIFY_DB_URL,
+// not DATABASE_URL — Prisma (via src/config/env.ts) only knows about the latter, and validates
+// it eagerly at import time, so this has to happen before the dynamic import below too. Kept as
+// a bridge here rather than changing env.ts/schema.prisma to read NETLIFY_DB_URL directly, so
+// local dev/tests/CI keep using a plain DATABASE_URL with no Netlify-specific knowledge at all.
+if (!process.env.DATABASE_URL && process.env.NETLIFY_DB_URL) {
+  process.env.DATABASE_URL = process.env.NETLIFY_DB_URL;
+}
+
 type ServerlessHandler = ReturnType<typeof serverless>;
 let cachedHandler: ServerlessHandler | null = null;
 
