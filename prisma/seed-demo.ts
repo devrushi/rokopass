@@ -541,12 +541,12 @@ async function seedMedia() {
   await prisma.activityMedia.deleteMany({ where: { activityId: { in: activityIds } } });
 
   const staffAvatarByProvider = new Map<string, string>();
-  providers.forEach((provider, index) => {
-    staffAvatarByProvider.set(provider.id, generateStaffAvatar(provider.firstName, provider.lastName, index));
-  });
+  for (const [index, provider] of providers.entries()) {
+    staffAvatarByProvider.set(provider.id, await generateStaffAvatar(provider.firstName, provider.lastName, index));
+  }
 
   for (const activity of activities) {
-    const photoUrl = generateActivityPhoto(activity.category);
+    const photoUrl = await generateActivityPhoto(activity.category);
     await prisma.activityMedia.create({
       data: { activityId: activity.id, type: "ACTIVITY_PHOTO", url: photoUrl, caption: activity.title },
     });
@@ -587,7 +587,7 @@ async function seedChildren() {
             isOnLeaderboard: c.isOnLeaderboard ?? false,
             // Only generate a photo if this child doesn't already have one — keeps re-runs from
             // needlessly regenerating/orphaning files for children that already look fine.
-            photoUrl: existing.photoUrl ?? generateKidPhoto(photoIndex),
+            photoUrl: existing.photoUrl ?? (await generateKidPhoto(photoIndex)),
           },
         });
       } else {
@@ -599,7 +599,7 @@ async function seedChildren() {
             dateOfBirth,
             allergyInfo: c.allergyInfo,
             isOnLeaderboard: c.isOnLeaderboard ?? false,
-            photoUrl: generateKidPhoto(photoIndex),
+            photoUrl: await generateKidPhoto(photoIndex),
           },
         });
       }

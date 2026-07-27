@@ -23,7 +23,7 @@ const CATEGORY_DIRS: Record<UploadCategory, string> = {
   receipts: EXPENSE_RECEIPT_DIR,
 };
 
-type UploadCategory = "activities" | "children" | "receipts";
+export type UploadCategory = "activities" | "children" | "receipts";
 
 // Set explicitly by netlify/functions/api.ts before it imports createApp() — deliberately not
 // relying on Netlify's own auto-injected env vars here, since their availability/naming at
@@ -59,27 +59,37 @@ export const imageUpload = multer({
   },
 });
 
-async function persistImage(category: UploadCategory, file: Express.Multer.File): Promise<string> {
-  const ext = path.extname(file.originalname).toLowerCase();
-  const filename = `${crypto.randomUUID()}${ext}`;
+// Shared by real uploads (multer buffers, below) and demo-data seeding (generated SVGs — see
+// prisma/demo-assets.ts), so both go through the same disk-vs-Blobs environment switch instead
+// of demo seeding having its own separate (and previously always-local-disk-only) code path.
+export async function persistAssetBuffer(
+  category: UploadCategory,
+  filename: string,
+  buffer: Buffer,
+  contentType: string,
+): Promise<string> {
   const key = `${category}/${filename}`;
 
   if (useBlobStorage()) {
     const store = getUploadsStore();
     // @netlify/blobs' BlobInput accepts string | ArrayBuffer | Blob — not a Node Buffer/Uint8Array
-    // directly, and multer's buffer can be a view into a larger pooled allocation, so slice out
-    // exactly the bytes we want into their own ArrayBuffer. Node Buffers are never backed by a
-    // SharedArrayBuffer in practice (multer's memoryStorage always allocates a plain Buffer).
-    const arrayBuffer = file.buffer.buffer.slice(
-      file.buffer.byteOffset,
-      file.buffer.byteOffset + file.buffer.byteLength,
-    ) as ArrayBuffer;
-    await store.set(key, arrayBuffer, { metadata: { contentType: file.mimetype } });
+    // directly, and the buffer can be a view into a larger pooled allocation, so slice out exactly
+    // the bytes we want into their own ArrayBuffer. Node Buffers are never backed by a
+    // SharedArrayBuffer in practice here (multer's memoryStorage and Buffer.from both allocate
+    // plain Buffers).
+    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
+    await store.set(key, arrayBuffer, { metadata: { contentType } });
   } else {
-    await fs.promises.writeFile(path.join(CATEGORY_DIRS[category], filename), file.buffer);
+    await fs.promises.writeFile(path.join(CATEGORY_DIRS[category], filename), buffer);
   }
 
   return `/uploads/${key}`;
+}
+
+async function persistImage(category: UploadCategory, file: Express.Multer.File): Promise<string> {
+  const ext = path.extname(file.originalname).toLowerCase();
+  const filename = `${crypto.randomUUID()}${ext}`;
+  return persistAssetBuffer(category, filename, file.buffer, file.mimetype);
 }
 
 async function deleteImage(url: string): Promise<void> {

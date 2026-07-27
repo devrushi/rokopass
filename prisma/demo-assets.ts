@@ -1,18 +1,13 @@
 /**
  * Locally-generated SVG placeholder images for demo data — no external image service, so a live
- * pitch demo never depends on internet access for photos to render. Written as real files under
- * uploads/activities/, using the exact same URL convention src/lib/upload.ts's real upload flow
- * uses, so they render identically to a genuine provider photo upload.
+ * pitch demo never depends on internet access for photos to render. Persisted via the same
+ * environment-aware persistAssetBuffer() the real upload flow uses (src/lib/upload.ts) — local
+ * disk when run as a plain script, Netlify Blobs when RUNNING_IN_NETLIFY_FUNCTION is set (see
+ * that seed script's own setup for how to point this at a real deployed site), so demo photos
+ * render identically to a genuine provider photo upload in either environment.
  */
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
-
-const UPLOAD_ROOT = path.resolve(process.cwd(), "uploads");
-const ACTIVITY_MEDIA_DIR = path.join(UPLOAD_ROOT, "activities");
-const CHILD_PHOTO_DIR = path.join(UPLOAD_ROOT, "children");
-fs.mkdirSync(ACTIVITY_MEDIA_DIR, { recursive: true });
-fs.mkdirSync(CHILD_PHOTO_DIR, { recursive: true });
+import { persistAssetBuffer } from "../src/lib/upload";
 
 interface CategoryStyle {
   light: string;
@@ -32,14 +27,13 @@ const FALLBACK_STYLE: CategoryStyle = { light: "#384851", emoji: "⭐" };
 
 const AVATAR_COLORS = ["#1d9e75", "#0091b8", "#b2852f", "#6a5acd", "#c2569b", "#d97a4d"];
 
-function writeSvg(dir: string, urlPrefix: string, svg: string): string {
+function writeSvg(category: "activities" | "children", svg: string): Promise<string> {
   const filename = `${crypto.randomUUID()}.svg`;
-  fs.writeFileSync(path.join(dir, filename), svg, "utf-8");
-  return `${urlPrefix}${filename}`;
+  return persistAssetBuffer(category, filename, Buffer.from(svg, "utf-8"), "image/svg+xml");
 }
 
 /** A category-themed illustration — diagonal gradient, soft decorative orbs, a large emoji. */
-export function generateActivityPhoto(category: string): string {
+export function generateActivityPhoto(category: string): Promise<string> {
   const style = CATEGORY_STYLES[category] ?? FALLBACK_STYLE;
   const gradId = `g${Math.random().toString(36).slice(2, 8)}`;
   const svg = `<svg width="640" height="400" viewBox="0 0 640 400" xmlns="http://www.w3.org/2000/svg">
@@ -55,11 +49,11 @@ export function generateActivityPhoto(category: string): string {
   <circle cx="540" cy="60" r="60" fill="#ffffff" opacity="0.07" />
   <text x="50%" y="53%" font-size="150" text-anchor="middle" dominant-baseline="middle">${style.emoji}</text>
 </svg>`;
-  return writeSvg(ACTIVITY_MEDIA_DIR, "/uploads/activities/", svg);
+  return writeSvg("activities", svg);
 }
 
 /** A simple initials avatar for a "meet the instructor" staff photo. */
-export function generateStaffAvatar(firstName: string, lastName: string, colorIndex: number): string {
+export function generateStaffAvatar(firstName: string, lastName: string, colorIndex: number): Promise<string> {
   const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   const color = AVATAR_COLORS[colorIndex % AVATAR_COLORS.length];
   const svg = `<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
@@ -67,14 +61,14 @@ export function generateStaffAvatar(firstName: string, lastName: string, colorIn
   <text x="50%" y="52%" font-family="Inter, system-ui, sans-serif" font-size="150" font-weight="700"
     fill="#ffffff" text-anchor="middle" dominant-baseline="middle">${initials}</text>
 </svg>`;
-  return writeSvg(ACTIVITY_MEDIA_DIR, "/uploads/activities/", svg);
+  return writeSvg("activities", svg);
 }
 
 const KID_EMOJIS = ["🧒", "👦", "👧", "🧑", "👶"];
 const KID_AVATAR_COLORS = ["#f4c77a", "#6fe3f5", "#c2569b", "#22b583", "#d97a4d", "#6a5acd"];
 
 /** A cheerful gradient avatar with a kid emoji — for the Children page and the leaderboard. */
-export function generateKidPhoto(seedIndex: number): string {
+export function generateKidPhoto(seedIndex: number): Promise<string> {
   const color = KID_AVATAR_COLORS[seedIndex % KID_AVATAR_COLORS.length];
   const emoji = KID_EMOJIS[seedIndex % KID_EMOJIS.length];
   const svg = `<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
@@ -82,5 +76,5 @@ export function generateKidPhoto(seedIndex: number): string {
   <circle cx="200" cy="200" r="180" fill="#ffffff" opacity="0.12" />
   <text x="50%" y="54%" font-size="190" text-anchor="middle" dominant-baseline="middle">${emoji}</text>
 </svg>`;
-  return writeSvg(CHILD_PHOTO_DIR, "/uploads/children/", svg);
+  return writeSvg("children", svg);
 }
