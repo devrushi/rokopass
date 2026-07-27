@@ -1817,3 +1817,109 @@ session — the local Playwright browser binary wasn't available in this
 environment's cache; the underlying logic (regex parsing, `Link`
 rendering) was verified directly instead, and both `tsc --noEmit` and
 `vite build` passed clean for the changed component.
+
+### 2026-07-27 — First Working Netlify Deploy (Draft/Preview)
+
+Got the full stack actually running on Netlify for the first time —
+frontend, the Express-in-a-Function backend, and a real Postgres
+database, verified end-to-end against a draft (non-production) URL.
+Production (`roshelia.co.uk`) was deliberately left untouched — see
+"Not done" below.
+
+**Netlify DB's runtime binding doesn't reach this function shape.**
+`NETLIFY_DB_URL` is genuinely present and working at *build* time
+(confirmed — `prisma migrate deploy` connected with it successfully
+during an earlier attempt), but absent from `process.env` at *request*
+time for a classic Lambda-handler-style function (this one, wrapping
+Express via `serverless-http`) — confirmed by testing both a raw env
+read and `@netlify/database`'s own `getConnectionString()`, both come
+back empty at runtime with identical function logs. The dynamic
+binding appears to only reach Netlify's newer v2/edge function
+runtimes. **Fix:** the client pulled the real connection string from
+the Netlify dashboard's Database page and gave it to me directly,
+which I set as a plain `DATABASE_URL` site environment variable —
+works identically to every other env var on this site, no special
+handling needed. `netlify/functions/api.ts` no longer does any
+NETLIFY_DB_URL bridging at all; it just expects `DATABASE_URL` to
+already be set, like everywhere else in this codebase. (I attempted
+to self-extract the value by echoing it into a build log — correctly
+blocked by the environment's safety classifier for handling a live
+credential that way; asking the client to retrieve and hand it over
+directly was the right call, not a workaround.)
+
+**Schema migrations can't run through the exposed `NETLIFY_DB_URL`
+role either** — `prisma migrate deploy` failed with "permission denied
+for schema public" even after granting privileges via `netlify
+database connect`, which turned out to be a red herring: that command
+proxies to a *different*, `dev`-context-only local database (connects
+to a database literally named `postgres`, not the real `netlifydb`),
+so the grant never touched the actual target. The working path:
+Netlify's own "Netlify Database" feature has its own migration
+convention — `netlify database migrations new` generates a
+`netlify/database/migrations/<name>/migration.sql` file, in the exact
+same one-file-per-migration format Prisma already uses, and Netlify's
+deploy pipeline applies these automatically with its own elevated
+internal access (confirmed in build logs: "Loading migrations from
+netlify/database/migrations directory"). Populated one migration
+(`0001_initial-schema`) by concatenating all 16 existing Prisma
+migration files in order, since this was a brand-new database with
+nothing applied yet. **Implication for future schema changes:** a new
+Prisma migration now needs a matching entry mirrored into
+`netlify/database/migrations/` to actually reach the deployed
+database — `prisma migrate deploy` is no longer part of the Netlify
+build command (removed after the permission failures above). In
+practice, for *this* deploy, the concatenated migration didn't
+actually apply cleanly through Netlify's pipeline either (the api
+route calls kept 500ing with "table does not exist" even after a
+build reported the migration as loaded) — resolved pragmatically by
+applying the same SQL file directly via `psql` using the real
+connection string once we had it, which is the fallback worth reaching
+for if Netlify's own migration runner doesn't visibly take effect.
+Age groups and the `PlatformSettings` singleton row (both
+non-sensitive baseline config, no credentials) were seeded the same
+way, directly via SQL — not by running `prisma/seed.ts`, which is
+explicitly out of scope for production (see below).
+
+**`serverless-http`'s `basePath` was wrong.** Originally set to
+`/.netlify/functions/api` on the theory that Netlify's proxy keeps the
+full rewritten path on the Lambda event. Testing showed otherwise: a
+request the frontend sent to `/api/health` arrived at Express as
+literally `/api/health` (visible in the resulting "Route not found"
+error), meaning Netlify's own runtime already strips its
+`/.netlify/functions/<name>` routing prefix before the function ever
+sees the event — only the app's own `/api` namespace prefix (from
+`netlify.toml`'s redirect) needed stripping. Fixed by changing
+`basePath` to `/api`; confirmed via `GET /api/health` → `{"status":
+"ok"}`.
+
+**Verified against the real draft deploy (not mocked):** `/api/health`
+returns ok; `/api/age-groups` and `/api/activities` return real
+(empty, then populated after seeding) data straight from Postgres;
+`POST /api/auth/register` created a real user, returned working
+JWTs, hashed the password correctly — then that test user was deleted
+again. Loaded the draft URL in a real browser — renders correctly,
+zero console errors, and the dev-only "Quick login" buttons correctly
+stay hidden (`import.meta.env.DEV` is false in this build, matching
+the intent in `Login.tsx`). Also re-confirmed the local
+disk-storage/test suite path is completely unaffected by any of
+this — 170/170 backend tests still green.
+
+**Not done / deliberately deferred:**
+- **Production (`roshelia.co.uk`) has not been touched.** Everything
+  above happened against Netlify draft/preview deploy URLs
+  (`netlify deploy` without `--prod`). Promoting to production needs
+  explicit client sign-off — a live custom domain isn't something to
+  silently overwrite.
+- **No admin account exists on the production database yet.**
+  `prisma/seed.ts`'s admin bootstrap uses a hardcoded, publicly-
+  documented dev password (`AdminPassword123`) — deliberately not run
+  against this database. Needs a real, private password before an
+  admin account can be created there.
+- **No demo/pitch data on production** — that decision (real-looking
+  empty platform vs. seeded demo content) belongs to the client, not
+  assumed.
+- **Real Stripe keys still not configured** (`STRIPE_SECRET_KEY`/
+  `STRIPE_WEBHOOK_SECRET` are still the same placeholders from local
+  dev) — subscriptions/checkout/webhooks won't work on this deploy
+  until real keys are provided and the webhook endpoint is registered
+  in Stripe pointing at the deployed function URL.

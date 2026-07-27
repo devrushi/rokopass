@@ -8,14 +8,11 @@ import serverless from "serverless-http";
 // the app is imported lazily inside getServerlessHandler() instead.
 process.env.RUNNING_IN_NETLIFY_FUNCTION = "true";
 
-// Netlify's built-in database (see AGENTS.md) injects its connection string as NETLIFY_DB_URL,
-// not DATABASE_URL — Prisma (via src/config/env.ts) only knows about the latter, and validates
-// it eagerly at import time, so this has to happen before the dynamic import below too. Kept as
-// a bridge here rather than changing env.ts/schema.prisma to read NETLIFY_DB_URL directly, so
-// local dev/tests/CI keep using a plain DATABASE_URL with no Netlify-specific knowledge at all.
-if (!process.env.DATABASE_URL && process.env.NETLIFY_DB_URL) {
-  process.env.DATABASE_URL = process.env.NETLIFY_DB_URL;
-}
+// DATABASE_URL is expected to already be a plain site environment variable by the time this
+// function runs (see AGENTS.md) — Netlify's built-in database's dynamic NETLIFY_DB_URL binding
+// (both a raw process.env read and @netlify/database's own getConnectionString()) confirmed
+// absent at runtime for this classic Lambda-handler-style function; that binding appears to only
+// reach Netlify's newer v2/edge function runtimes, not this one.
 
 type ServerlessHandler = ReturnType<typeof serverless>;
 let cachedHandler: ServerlessHandler | null = null;
@@ -28,11 +25,13 @@ async function getServerlessHandler(): Promise<ServerlessHandler> {
     const { createApp } = await import("../../src/app");
     const app = createApp();
     cachedHandler = serverless(app, {
-      // netlify.toml rewrites /api/* to /.netlify/functions/api/:splat — Netlify's proxy keeps
-      // that full rewritten path on the event, so Express needs this prefix stripped to see the
-      // paths its routes actually expect (e.g. "/auth/login", not
-      // "/.netlify/functions/api/auth/login").
-      basePath: "/.netlify/functions/api",
+      // netlify.toml rewrites /api/* to /.netlify/functions/api/:splat, but Netlify's runtime
+      // already strips its own "/.netlify/functions/api" routing prefix before the event reaches
+      // this handler — confirmed by testing (a request the frontend sent to "/api/health" showed
+      // up here as exactly that, not the full rewritten path). So only the app's own "/api"
+      // namespace prefix needs stripping for Express to see the paths its routes actually expect
+      // (e.g. "/auth/login", not "/api/auth/login").
+      basePath: "/api",
       // Content types that must survive as exact bytes (base64 round-tripped by Netlify's proxy)
       // rather than being treated as UTF-8 text — file uploads, and the PDF/CSV statement
       // downloads. Deliberately does NOT include application/json: both ordinary JSON API
