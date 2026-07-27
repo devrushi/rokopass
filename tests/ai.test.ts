@@ -53,6 +53,7 @@ afterAll(async () => {
   const users = await prisma.user.findMany({ where: { email: { endsWith: EMAIL_SUFFIX } } });
   const userIds = users.map((u) => u.id);
   await prisma.activity.deleteMany({ where: { providerId: { in: userIds } } });
+  await prisma.child.deleteMany({ where: { parentId: { in: userIds } } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
 });
 
@@ -169,6 +170,44 @@ describe("POST /ai/chat", () => {
     const call = messagesCreateMock.mock.calls[0][0];
     expect(call.system).toContain("[Browse Activities](/browse)");
     expect(call.system).toContain("[My Children](/children)");
+  });
+
+  it("includes the parent's own children and ages, so it can answer without re-asking", async () => {
+    const { token, user } = await makeUser("parent-child-ctx", "PARENT");
+    const eightYearsAgo = new Date();
+    eightYearsAgo.setFullYear(eightYearsAgo.getFullYear() - 8);
+    await prisma.child.create({
+      data: {
+        parentId: user.id,
+        firstName: "Ruby",
+        lastName: "Brown",
+        dateOfBirth: eightYearsAgo,
+      },
+    });
+    mockTextResponse("Ruby's 8, so here's what fits her age band...");
+
+    const res = await request(app)
+      .post("/ai/chat")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ messages: [{ role: "user", content: "Suggest something for Ruby" }] });
+
+    expect(res.status).toBe(200);
+    const call = messagesCreateMock.mock.calls[0][0];
+    expect(call.system).toContain("Ruby Brown, age 8");
+    expect(call.system).toContain("use that child's age directly from the list rather than asking for it");
+  });
+
+  it("tells the model no children are on file yet when the parent has none", async () => {
+    const { token } = await makeUser("parent-no-children", "PARENT");
+    mockTextResponse("Add a child first!");
+
+    await request(app)
+      .post("/ai/chat")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ messages: [{ role: "user", content: "Suggest something for my kid" }] });
+
+    const call = messagesCreateMock.mock.calls[0][0];
+    expect(call.system).toContain("(no children added yet");
   });
 
   it("rejects admin (not in scope for this feature)", async () => {

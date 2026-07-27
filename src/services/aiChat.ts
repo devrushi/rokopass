@@ -33,24 +33,43 @@ const PROVIDER_PAGES =
   "- [Expenses](/provider/expenses) — log business expenses\n" +
   "- [Leaderboard](/leaderboard) — kids' attendance leaderboard";
 
-async function buildParentSystemPrompt(): Promise<string> {
-  const activities = await prisma.activity.findMany({
-    where: {
-      isActive: true,
-      isFlagged: false,
-      provider: { OR: [{ role: "ADMIN" }, { verificationStatus: "APPROVED" }] },
-    },
-    select: {
-      title: true,
-      category: true,
-      location: true,
-      creditCost: true,
-      isSendFriendly: true,
-      ageGroup: { select: { label: true, minAge: true, maxAge: true } },
-    },
-    orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
-    take: 150,
-  });
+// Age in whole years as of today — matches how activities are age-gated (AgeGroup.minAge/maxAge
+// are whole years), so the model can compare a child's age to the catalogue directly.
+function ageInYears(dateOfBirth: Date): number {
+  const now = new Date();
+  let age = now.getFullYear() - dateOfBirth.getFullYear();
+  const hasHadBirthdayThisYear =
+    now.getMonth() > dateOfBirth.getMonth() ||
+    (now.getMonth() === dateOfBirth.getMonth() && now.getDate() >= dateOfBirth.getDate());
+  if (!hasHadBirthdayThisYear) age -= 1;
+  return age;
+}
+
+async function buildParentSystemPrompt(userId: string): Promise<string> {
+  const [activities, children] = await Promise.all([
+    prisma.activity.findMany({
+      where: {
+        isActive: true,
+        isFlagged: false,
+        provider: { OR: [{ role: "ADMIN" }, { verificationStatus: "APPROVED" }] },
+      },
+      select: {
+        title: true,
+        category: true,
+        location: true,
+        creditCost: true,
+        isSendFriendly: true,
+        ageGroup: { select: { label: true, minAge: true, maxAge: true } },
+      },
+      orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }],
+      take: 150,
+    }),
+    prisma.child.findMany({
+      where: { parentId: userId },
+      select: { firstName: true, lastName: true, dateOfBirth: true },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
 
   const catalogue = activities
     .map(
@@ -60,20 +79,30 @@ async function buildParentSystemPrompt(): Promise<string> {
     )
     .join("\n");
 
+  const childrenList = children
+    .map((c) => `- ${c.firstName} ${c.lastName}, age ${ageInYears(c.dateOfBirth)}`)
+    .join("\n");
+
   return (
     "You are the RokidsPass assistant, talking to a parent. RokidsPass is a ClassPass-style " +
     "subscription platform where parents in Leicester book extracurricular classes for their " +
     "children using monthly credits. You help with two things:\n\n" +
-    "1. Choosing activities — match what they describe (age, interest, location, day, " +
-    "SEND-friendly needs, etc.) against the catalogue below, which is the full current list — " +
-    "nothing else exists on the platform right now. When you recommend one, name it exactly as " +
-    "listed and link to [Browse Activities](/browse) to book it.\n" +
+    "1. Choosing activities — match what they describe (interest, location, day, SEND-friendly " +
+    "needs, etc.) against the catalogue below, which is the full current list — nothing else " +
+    "exists on the platform right now. This parent's own children are listed below too, with " +
+    "their current age — if they ask about a child by name (e.g. \"suggest something for " +
+    "Ruby\"), use that child's age directly from the list rather than asking for it; only ask if " +
+    "the name they used doesn't match anyone on the list, or they haven't named a child at all. " +
+    "When you recommend an activity, name it exactly as listed and link to " +
+    "[Browse Activities](/browse) to book it.\n" +
     "2. Using the platform — explain the booking flow (browse → request a spot → the provider " +
     "approves or rejects it, holding the child's credits in the meantime → attend), managing " +
     "child profiles and allergy info, checking credit balance/plan, viewing past bookings and " +
     "invoices, and the opt-in kids leaderboard. Point them to the right page using these links:\n" +
     `${PARENT_PAGES}\n\n` +
-    `${BASE_RULES}\n\nCurrent activity catalogue:\n${catalogue || "(no activities are listed yet)"}`
+    `${BASE_RULES}\n\n` +
+    `This parent's children:\n${childrenList || "(no children added yet — suggest [My Children](/children) if they mention one by name)"}\n\n` +
+    `Current activity catalogue:\n${catalogue || "(no activities are listed yet)"}`
   );
 }
 
@@ -110,8 +139,8 @@ function buildProviderSystemPrompt(): string {
   );
 }
 
-export async function chatWithAssistant(role: string, messages: ChatMessage[]): Promise<string> {
-  const system = role === "PARENT" ? await buildParentSystemPrompt() : buildProviderSystemPrompt();
+export async function chatWithAssistant(userId: string, role: string, messages: ChatMessage[]): Promise<string> {
+  const system = role === "PARENT" ? await buildParentSystemPrompt(userId) : buildProviderSystemPrompt();
 
   let response;
   try {

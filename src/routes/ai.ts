@@ -14,7 +14,7 @@ aiRouter.post("/chat", requireAuth, requireRole("PARENT", "PROVIDER"), async (re
       throw new AppError(parsed.error.issues[0]?.message ?? "Invalid chat request", 400);
     }
 
-    const reply = await chatWithAssistant(req.user!.role, parsed.data.messages);
+    const reply = await chatWithAssistant(req.user!.sub, req.user!.role, parsed.data.messages);
     res.json({ reply });
   } catch (err) {
     next(err);
