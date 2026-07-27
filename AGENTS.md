@@ -2075,3 +2075,29 @@ resulting link both closed the widget and navigated correctly;
 navigating away and back (Dashboard → Browse) with the widget reopened
 showed the same 2-message conversation still present, confirming the
 sessionStorage persistence actually works across route changes.
+
+### 2026-07-27 — "Try the Demo" Nav Button
+
+Client asked for a demo button on the landing nav, so a prospective
+client can try the live app without registering. Added a "Try the
+demo" button (`client/src/components/Layout.tsx`) shown alongside
+Log in/Sign up whenever no one's signed in — one click logs in as a
+real seeded pitch-demo parent account
+(`david.brown@example.com`/`PitchDemo123`, from `prisma/seed-demo.ts`)
+and lands on the dashboard.
+
+Deliberately not the same thing as `Login.tsx`'s existing "Quick
+login" buttons — those are gated behind `import.meta.env.DEV` and
+never ship to production by design (real credentials for internal
+testing). This button is the opposite: meant to ship to production,
+using one of the already-public pitch-demo accounts (the whole
+seeded dataset already assumes a shared, publicly-documented password
+— see the two previous entries) rather than any account whose
+credentials need to stay private. If the demo account is ever missing
+in a given environment, the button falls back to a normal `/login`
+navigation instead of failing silently.
+
+**Verified:** both builds clean, real browser pass — clicking "Try
+the demo" from a logged-out `/login` page correctly logged in and
+landed on `/dashboard`, zero console errors. 172 backend tests
+unaffected (frontend-only change).

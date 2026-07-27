@@ -1,12 +1,36 @@
 import { useState } from "react";
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { ChatWidget } from "./ChatWidget";
 import "./Layout.css";
 
+// A real seeded pitch-demo account (see prisma/seed-demo.ts) — unlike Login.tsx's "Quick login"
+// buttons, this is deliberately available in production too, so a prospective client can try the
+// live app from the marketing nav without registering. Picked a parent account specifically
+// since that's the more visitor-relevant side of the product (booking activities) — a curious
+// provider/admin can still register or use their own login.
+const DEMO_LOGIN = { email: "david.brown@example.com", password: "PitchDemo123" };
+
 export function Layout() {
-  const { user, logout } = useAuth();
+  const { user, login, logout } = useAuth();
+  const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
+  const [demoLoginBusy, setDemoLoginBusy] = useState(false);
+
+  async function handleDemoLogin() {
+    setNavOpen(false);
+    setDemoLoginBusy(true);
+    try {
+      await login(DEMO_LOGIN.email, DEMO_LOGIN.password);
+      navigate("/dashboard");
+    } catch {
+      // Demo account missing/misconfigured in this environment — fall back to a normal login
+      // rather than leaving the visitor stuck on a silent failure.
+      navigate("/login");
+    } finally {
+      setDemoLoginBusy(false);
+    }
+  }
 
   return (
     <div className="layout">
@@ -131,6 +155,14 @@ export function Layout() {
             </>
           ) : (
             <>
+              <button
+                type="button"
+                className="layout__demo-link"
+                onClick={handleDemoLogin}
+                disabled={demoLoginBusy}
+              >
+                {demoLoginBusy ? "Loading demo…" : "Try the demo"}
+              </button>
               <Link to="/login" onClick={() => setNavOpen(false)}>
                 Log in
               </Link>

@@ -67,7 +67,8 @@
   color: #fff;
 }
 
-.layout__logout {
+.layout__logout,
+.layout__demo-link {
   background: transparent;
   border: 1px solid rgba(245, 241, 234, 0.35);
   border-radius: 999px;
@@ -79,9 +80,15 @@
   color: rgba(245, 241, 234, 0.9);
 }
 
-.layout__logout:hover {
+.layout__logout:hover,
+.layout__demo-link:hover {
   border-color: #fff;
   color: #fff;
+}
+
+.layout__demo-link:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .layout__nav-toggle {
