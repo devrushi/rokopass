@@ -14,15 +14,16 @@ function formatSchedule(activity: Activity): string | null {
 interface ActivityCardProps {
   activity: Activity;
   linkTo: string;
+  onClick?: () => void;
 }
 
-export function ActivityCard({ activity, linkTo }: ActivityCardProps) {
+export function ActivityCard({ activity, linkTo, onClick }: ActivityCardProps) {
   const cover = activity.media.find((m) => m.type === "ACTIVITY_PHOTO");
   const schedule = formatSchedule(activity);
   const { minAge, maxAge } = activity.ageGroup;
 
   return (
-    <Link to={linkTo} className="browse-card">
+    <Link to={linkTo} className="browse-card" onClick={onClick}>
       <div className="browse-card__image">
         {cover ? (
           <img src={apiAssetUrl(cover.url)} alt="" />

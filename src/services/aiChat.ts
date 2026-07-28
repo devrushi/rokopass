@@ -143,7 +143,41 @@ function buildProviderSystemPrompt(): string {
   );
 }
 
-export async function chatWithAssistant(userId: string, role: string, messages: ChatMessage[]): Promise<string> {
+// Matches the same [Label](/browse/<id>) links the system prompt tells the model to reuse
+// verbatim from its own catalogue (see buildParentSystemPrompt) — used to pull out exactly which
+// activities it recommended, so the frontend can render real activity cards instead of just a
+// text link. Only /browse/<id> (not the bare /browse page) has a UUID to extract.
+const RECOMMENDED_ACTIVITY_LINK = /\/browse\/([0-9a-f-]{36})/gi;
+
+function extractRecommendedActivityIds(reply: string): string[] {
+  const ids = new Set<string>();
+  for (const match of reply.matchAll(RECOMMENDED_ACTIVITY_LINK)) {
+    ids.add(match[1]);
+  }
+  return [...ids];
+}
+
+export interface ChatResult {
+  reply: string;
+  recommendedActivities: Awaited<ReturnType<typeof loadRecommendedActivities>>;
+}
+
+function loadRecommendedActivities(ids: string[]) {
+  return prisma.activity.findMany({
+    where: { id: { in: ids } },
+    include: {
+      ageGroup: true,
+      media: true,
+      recurringSchedules: {
+        select: { dayOfWeek: true, startTime: true, durationMinutes: true },
+        take: 1,
+        orderBy: { createdAt: "asc" },
+      },
+    },
+  });
+}
+
+export async function chatWithAssistant(userId: string, role: string, messages: ChatMessage[]): Promise<ChatResult> {
   const system = role === "PARENT" ? await buildParentSystemPrompt(userId) : buildProviderSystemPrompt();
 
   let response;
@@ -162,5 +196,11 @@ export async function chatWithAssistant(userId: string, role: string, messages: 
   if (!textBlock || textBlock.type !== "text") {
     throw new AppError("The AI assistant is temporarily unavailable", 502);
   }
-  return textBlock.text;
+
+  // Only parents get activity recommendations — a provider's own links are all static pages, so
+  // this is always empty for them.
+  const recommendedIds = role === "PARENT" ? extractRecommendedActivityIds(textBlock.text) : [];
+  const recommendedActivities = recommendedIds.length > 0 ? await loadRecommendedActivities(recommendedIds) : [];
+
+  return { reply: textBlock.text, recommendedActivities };
 }

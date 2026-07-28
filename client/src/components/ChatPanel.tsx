@@ -1,7 +1,8 @@
 import { Fragment, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { apiRequest, ApiError } from "../lib/apiClient";
-import { useChatMessages } from "../hooks/useChatMessages";
+import { useChatMessages, type ChatMessage } from "../hooks/useChatMessages";
+import { ActivityCard } from "./ActivityCard";
 import "./ChatPanel.css";
 
 // Matches the assistant's own [Label](/path) link convention (see src/services/aiChat.ts) —
@@ -9,27 +10,31 @@ import "./ChatPanel.css";
 // renderer for what's otherwise plain conversational text.
 const MARKDOWN_LINK = /\[([^\]]+)\]\((\/[^)\s]+)\)/g;
 
-function renderMessageContent(content: string, onNavigate?: () => void) {
-  const parts: (string | { label: string; path: string })[] = [];
+// A recommended activity already gets its own rich ActivityCard rendered below the message (see
+// recommendedActivities), so its inline [Label](/browse/<id>) link would just be a redundant
+// second way to reach the same page — rendered as plain text instead of a second link.
+function renderMessageContent(content: string, cardActivityIds: Set<string>, onNavigate?: () => void) {
+  const parts: (string | { label: string; path: string; isCardLink: boolean })[] = [];
   let lastIndex = 0;
   for (const match of content.matchAll(MARKDOWN_LINK)) {
     const [full, label, path] = match;
     const index = match.index ?? 0;
     if (index > lastIndex) parts.push(content.slice(lastIndex, index));
-    parts.push({ label, path });
+    const activityId = path.startsWith("/browse/") ? path.slice("/browse/".length) : null;
+    parts.push({ label, path, isCardLink: activityId !== null && cardActivityIds.has(activityId) });
     lastIndex = index + full.length;
   }
   if (lastIndex < content.length) parts.push(content.slice(lastIndex));
 
-  return parts.map((part, i) =>
-    typeof part === "string" ? (
-      <Fragment key={i}>{part}</Fragment>
-    ) : (
+  return parts.map((part, i) => {
+    if (typeof part === "string") return <Fragment key={i}>{part}</Fragment>;
+    if (part.isCardLink) return <Fragment key={i}>{part.label}</Fragment>;
+    return (
       <Link key={i} to={part.path} className="chat-message__link" onClick={onNavigate}>
         {part.label}
       </Link>
-    ),
-  );
+    );
+  });
 }
 
 interface ChatPanelProps {
@@ -55,11 +60,19 @@ export function ChatPanel({ compact = false, onLinkNavigate }: ChatPanelProps) {
     setInput("");
     setIsSending(true);
     try {
-      const data = await apiRequest<{ reply: string }>("/ai/chat", {
-        method: "POST",
-        body: { messages: nextMessages },
-      });
-      setMessages([...nextMessages, { role: "assistant", content: data.reply }]);
+      const data = await apiRequest<{ reply: string; recommendedActivities: ChatMessage["recommendedActivities"] }>(
+        "/ai/chat",
+        {
+          method: "POST",
+          // Only role/content go over the wire — recommendedActivities is UI-only state attached
+          // to past assistant turns, not something the model needs back as conversation history.
+          body: { messages: nextMessages.map(({ role, content }) => ({ role, content })) },
+        },
+      );
+      setMessages([
+        ...nextMessages,
+        { role: "assistant", content: data.reply, recommendedActivities: data.recommendedActivities },
+      ]);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to reach the assistant");
     } finally {
@@ -71,11 +84,31 @@ export function ChatPanel({ compact = false, onLinkNavigate }: ChatPanelProps) {
     <div className={`chat-panel ${compact ? "chat-panel--compact" : ""}`}>
       <div className="chat-window">
         {messages.length === 0 && <p className="page-status">Say hello to get started.</p>}
-        {messages.map((message, index) => (
-          <div key={index} className={`chat-message chat-message--${message.role}`}>
-            {message.role === "assistant" ? renderMessageContent(message.content, onLinkNavigate) : message.content}
-          </div>
-        ))}
+        {messages.map((message, index) => {
+          const cardActivities = message.recommendedActivities ?? [];
+          const cardActivityIds = new Set(cardActivities.map((a) => a.id));
+          return (
+            <Fragment key={index}>
+              <div className={`chat-message chat-message--${message.role}`}>
+                {message.role === "assistant"
+                  ? renderMessageContent(message.content, cardActivityIds, onLinkNavigate)
+                  : message.content}
+              </div>
+              {cardActivities.length > 0 && (
+                <div className="chat-message__cards">
+                  {cardActivities.map((activity) => (
+                    <ActivityCard
+                      key={activity.id}
+                      activity={activity}
+                      linkTo={`/browse/${activity.id}`}
+                      onClick={onLinkNavigate}
+                    />
+                  ))}
+                </div>
+              )}
+            </Fragment>
+          );
+        })}
         {isSending && <div className="chat-message chat-message--assistant chat-message--pending">Thinking…</div>}
       </div>
 

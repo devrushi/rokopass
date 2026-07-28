@@ -397,14 +397,23 @@ async function seedProvidersAndActivities() {
           creditCost: DEFAULT_CREDIT_COST,
         },
       });
-      await prisma.activityMedia.create({
-        data: {
-          activityId: activity.id,
-          type: "ACTIVITY_PHOTO",
-          url: await generateActivityPhoto(p.category),
-          caption: p.name,
-        },
-      });
+      // SKIP_MEDIA is for running this script from a plain local shell against a *remote*
+      // database without Netlify Blobs credentials on hand — persistAssetBuffer would otherwise
+      // default to writing the photo to this machine's own disk, which the live site (Blobs-
+      // backed there) can't actually serve, producing a broken image rather than a photo. Leaving
+      // an activity with no photo falls back to Browse's plain placeholder tile instead, which is
+      // the better failure mode. Not needed for local dev (disk storage matches local dev's own
+      // serving path) or a future run with RUNNING_IN_NETLIFY_FUNCTION + Blobs creds set.
+      if (process.env.SKIP_MEDIA !== "true") {
+        await prisma.activityMedia.create({
+          data: {
+            activityId: activity.id,
+            type: "ACTIVITY_PHOTO",
+            url: await generateActivityPhoto(p.category),
+            caption: p.name,
+          },
+        });
+      }
     }
     activityCount += 1;
   }

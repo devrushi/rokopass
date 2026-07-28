@@ -169,6 +169,50 @@ describe("POST /ai/chat", () => {
     expect(call.system).toContain("reuse that exact link verbatim");
   });
 
+  it("returns the recommended activity's full data alongside the reply, for rendering a real card", async () => {
+    const provider = await makeUser("chat-provider-card", "PROVIDER");
+    const activity = await prisma.activity.create({
+      data: {
+        providerId: provider.user.id,
+        ageGroupId,
+        title: "Card Render Test Gymnastics",
+        description: "test",
+        category: "Gymnastics",
+        location: "Test Gym",
+        capacity: 10,
+        creditCost: 4,
+      },
+    });
+
+    const { token } = await makeUser("parent-card", "PARENT");
+    mockTextResponse(`Try [Card Render Test Gymnastics](/browse/${activity.id})!`);
+
+    const res = await request(app)
+      .post("/ai/chat")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ messages: [{ role: "user", content: "Anything for gymnastics?" }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedActivities).toHaveLength(1);
+    expect(res.body.recommendedActivities[0]).toMatchObject({
+      id: activity.id,
+      title: "Card Render Test Gymnastics",
+    });
+  });
+
+  it("returns no recommended activities when the reply doesn't link to one", async () => {
+    const { token } = await makeUser("parent-no-card", "PARENT");
+    mockTextResponse("You can browse everything on the Browse Activities page.");
+
+    const res = await request(app)
+      .post("/ai/chat")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ messages: [{ role: "user", content: "What can I book?" }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedActivities).toEqual([]);
+  });
+
   it("lets a provider chat and gets platform-help context, not activity data", async () => {
     const { token } = await makeUser("provider", "PROVIDER");
     mockTextResponse("Go to Provider Dashboard > New activity.");

@@ -1,10 +1,15 @@
 import { useState } from "react";
+import type { Activity } from "../lib/types";
 
 const STORAGE_KEY = "rokidspass.chatMessages";
 
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
+  // Full activity data for anything the assistant recommended in this message (parsed
+  // server-side from its own [Label](/browse/<id>) links) — lets the UI render a real
+  // ActivityCard instead of just a text link. Always empty/absent for user messages.
+  recommendedActivities?: Activity[];
 }
 
 function readStored(): ChatMessage[] {

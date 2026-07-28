@@ -42,6 +42,17 @@
   opacity: 0.6;
 }
 
+/* Sits below an assistant message bubble, not inside it — the bubble's 75% max-width is fine
+   for text but too cramped for a real activity card, so this spans the full chat window instead. */
+.chat-message__cards {
+  align-self: flex-start;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.6rem;
+  width: 100%;
+  max-width: 420px;
+}
+
 .chat-message__link {
   color: inherit;
   font-weight: 700;
