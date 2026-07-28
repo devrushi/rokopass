@@ -94,11 +94,19 @@ async function buildParentSystemPrompt(userId: string): Promise<string> {
     "their current age — if they ask about a child by name (e.g. \"suggest something for " +
     "Ruby\"), use that child's age directly from the list rather than asking for it; only ask if " +
     "the name they used doesn't match anyone on the list, or they haven't named a child at all. " +
-    "Each catalogue entry already starts with its own [Activity Name](/browse/<id>) link — when " +
-    "you recommend a specific activity, reuse that exact link verbatim so the parent goes " +
-    "straight to that activity's own page to book it, never a generic link. Only link to " +
-    "[Browse Activities](/browse) itself when they want to browse everything, not when " +
-    "recommending one specific activity.\n" +
+    "Each catalogue entry already starts with its own [Activity Name](/browse/<id>) link — every " +
+    "single time you name a specific activity, anywhere in your reply, reuse that exact link " +
+    "verbatim (never just its plain name, and never a generic link) so the parent goes straight " +
+    "to that activity's own page to book it. This applies even when you're listing several " +
+    "options, not just a single recommendation. HARD LIMIT: never link more than 4 activities in " +
+    "one reply, even if far more match and even if the parent asks for \"all\" of them — each " +
+    "link costs a lot of your reply budget, and going past 4 risks your reply being cut off " +
+    "mid-link. If more than 4 match, pick the 4 best and say there are more, then either ask a " +
+    "follow-up question to narrow it down or point to [Browse Activities](/browse) filtered by " +
+    "category for the rest — never list additional matches by plain name instead of a link, only " +
+    "omit them from the reply entirely. Only link to [Browse Activities](/browse) itself when " +
+    "they want to browse everything themselves, not as a substitute for linking the specific " +
+    "activities you're naming.\n" +
     "2. Using the platform — explain the booking flow (browse → request a spot → the provider " +
     "approves or rejects it, holding the child's credits in the meantime → attend), managing " +
     "child profiles and allergy info, checking credit balance/plan, viewing past bookings and " +
@@ -184,7 +192,11 @@ export async function chatWithAssistant(userId: string, role: string, messages: 
   try {
     response = await anthropic.messages.create({
       model: AI_MODEL,
-      max_tokens: 500,
+      // A [Label](/browse/<uuid>) link alone is ~25-30 tokens; a reply legitimately using the
+      // system prompt's 4-link limit plus surrounding text needs more headroom than 500 gave it —
+      // that budget was observed truncating mid-link on a broad query, leaving a raw unparsed
+      // "[Label" fragment visible in the chat.
+      max_tokens: 800,
       system,
       messages,
     });

@@ -2393,6 +2393,57 @@ one now); not a regression introduced by this change, and not
 something worth chasing with stricter prompt engineering for this
 scope.
 
-**Not yet done:** shipped to local dev only — deploying this to the
-draft URL is blocked on the same Netlify CLI login gap as the entry
-above.
+**Not yet done (as of writing this entry):** shipped to local dev
+only — deploying this to the draft URL was blocked on the same
+Netlify CLI login gap as the entry above. Resolved and shipped the
+same session — see the next two entries.
+
+### 2026-07-28 — Netlify CLI Login Unblocked, Stale Function-Bundle Bug Found
+
+The client supplied a Netlify personal access token to unblock the
+CLI-login gap noted in the last two entries (`netlify status` then
+correctly showed the linked `rokidspass` project). First `netlify
+deploy` attempt failed outright: `JSONHTTPError: The function exceeds
+the maximum size of 250 MB`. Root cause: `node_modules/.prisma/client`
+had accumulated duplicate query-engine binaries — files like
+`libquery_engine-rhel-openssl-1.0.x.so 2.node` and `...so 3.node`
+alongside the real ones, ~20MB each, left over from `npx prisma
+generate` being re-run several times this session (this schema's
+three `binaryTargets` already means three real ~20MB engines bundled
+per deploy; the stale duplicates on top of that pushed the zipped
+function past Netlify's limit). Fixed by deleting
+`node_modules/.prisma` and regenerating clean (exactly 3 `.node` files
+after, ~58MB total instead of ~180MB+). Not a code change — nothing to
+commit — but worth documenting since it'll recur if `prisma generate`
+keeps getting re-run without ever cleaning that directory first.
+
+Redeployed successfully afterward; verified against the fresh draft
+URL that the real-provider directory (from two entries up) and the
+new Website/Email/Call contact buttons (from three entries up) are
+now both live together for the first time.
+
+### 2026-07-28 — Ask AI Cards: Fixed a Real Bug Found on the Redeploy
+
+The client tried the new activity-card feature (previous entry) live
+and hit a real bug immediately: a broad query ("what are all the
+dance and performing arts options for a 10 year old?") made the model
+try to link all 13 matching activities per the "every named activity
+must use its real link" instruction just added — and ran out of the
+500-token reply budget mid-link, leaving a raw, unparsed `[118 Dance
+Studio` fragment visible in the chat bubble. This was a real
+regression introduced by that instruction, not a pre-existing gap.
+
+Two changes, both in `buildParentSystemPrompt`/`chatWithAssistant`
+(`src/services/aiChat.ts`): the prompt now sets a hard 4-activity-
+link cap per reply — even if the parent asks for "all" of them, pick
+the 4 best, say there are more, and point to a filtered
+[Browse Activities](/browse) or ask a narrowing question, never fall
+back to listing the rest by plain name. `max_tokens` raised
+500 → 800, since even a compliant 4-link reply needs more headroom
+than 500 gave it (~25-30 tokens per link before any surrounding text).
+
+**Verified:** re-ran the exact same query that broke against a real
+Anthropic call — clean, complete reply, exactly 4 real `ActivityCard`s
+rendered, a plain-text mention that more exist, and a working
+[Browse Activities](/browse) link for the rest. 178/178 backend tests
+still green. Redeployed to the draft URL with this fix included.
